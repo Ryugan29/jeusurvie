@@ -112,3 +112,24 @@ assez sombres pour se détacher du ciel — le rouge l'a prouvé, d'où la couch
 d'ondulation remplacées par des ronds), étoiles plus fines, planète abaissée (hors champ à 33-67°) et éclairée de trois quarts (noire quand la lune l'éclairait).
 Vérifié : 777 tests, typecheck, lint, build ; console sans erreur de shader ; ~90-98 images/s sur la machine de José.
 
+
+## 2026-11-01 — Refonte réaliste et profils graphiques LOW / MEDIUM / HIGH / ULTRA (demande de José, ADR 0012)
+Audit : Babylon 9.33 (WebGL 2), pipeline HDR + ACES, SSAO2, rayons, ombres en cascade ; mais sol en aplats peints (matériau standard),
+palette et ciel saturés, végétation lue en sRGB comme du linéaire (deux fois trop claire à côté d'un sol physique), qualité réglable
+seulement par l'adresse, sans interface ni enregistrement, effets créés à la main dans le spike.
+Fait :
+- render-data/quality : quatre profils complets + dérogations qui ne font que couper (base des réglages individuels) ;
+- adapters/storage/graphics-preferences : préférences validées, jamais d'exception ;
+- adapters/babylon/render-pipeline : chaîne unique, reconstruite à chaud ; SSR allumé seulement sur sol mouillé sans réordonner ;
+  pré-passe retirée en LOW ;
+- sol physique (terrain-surface-plugin + ground-textures générées sur la carte graphique, 256 à 2048 px) ; relief lointain physique ;
+- palette, lumière de l'heure, étalonnage, ombres réalistes ; végétation en albédo réel (linéaire, marge HDR, reflet cireux) ;
+- ciel : Mie, nuages Beer + poudre, nuages en volume (ULTRA) ;
+- atmosphere-pass : perspective atmosphérique (brume de hauteur intégrée, diffusion de l'astre) et profondeur de champ (ULTRA) ;
+- élagage par secteur de vue de la végétation et du couvre-sol ;
+- Réglages → Graphismes (ui/settings, maquette v1).
+Supprimés : render-data/painted-ground et babylon/painted-ground-plugin (remplacés). Brume PBR (pbr-fog) : mélange linéaire, comme le
+standard désormais linéaire. Tests réécrits selon leur intention (palette, lumière, étalonnage, terrain).
+Vérifié à l'écran (navigateur automatique, rendu logiciel SwiftShader, 640 × 360, vue limitée à 256 m) : les quatre profils, avant/après
+au même cadrage. Défaut trouvé à l'écran et corrigé : SSAO de Babylon à 0,75 de résolution + passes qui lisent la profondeur = image noire
+(HIGH passe en pleine résolution, test garde-fou). Non vérifié : fluidité réelle sur carte graphique (à mesurer par José, panneau F).

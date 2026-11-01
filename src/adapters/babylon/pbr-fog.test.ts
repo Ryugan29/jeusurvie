@@ -25,11 +25,11 @@ describe('brume des matériaux PBR : texte du shader', () => {
     expect(BABYLON_FOG_FRAGMENT).toBe(fogFragment.shader);
   });
 
-  it('PBR : mélange en gamma comme le matériau standard, avec la visibilité NON convertie, puis retour en linéaire', () => {
+  it('PBR : le même mélange linéaire que le matériau standard (ADR 0012 : tout est linéaire), visibilité NON convertie', () => {
     const pbr = resolve(PBR_FOG_FRAGMENT, ['FOG', 'PBR']);
-    expect(pbr).toContain('color.rgb=toLinearSpace(mix(vFogColor,toGammaSpace(color.rgb),fog));');
+    expect(pbr).toBe(resolve(PBR_FOG_FRAGMENT, ['FOG']));
+    expect(pbr).toContain('color.rgb=mix(vFogColor,color.rgb,fog);');
     expect(pbr).not.toContain('toLinearSpace(fog)');
-    expect(pbr).not.toContain('color.rgb=mix(vFogColor,color.rgb,fog);');
   });
 
   it('standard : la branche reste identique, caractère pour caractère, à celle de Babylon', () => {
@@ -45,7 +45,7 @@ describe('brume des matériaux PBR : texte du shader', () => {
   it('résiste à la substitution de Babylon : #include<fogFragment>(color,finalColor) remplace chaque « color » (pas « vFogColor »)', () => {
     const substituted = PBR_FOG_FRAGMENT.replace(new RegExp('color', 'g'), 'finalColor');
     const pbr = resolve(substituted, ['FOG', 'PBR']);
-    expect(pbr).toContain('finalColor.rgb=toLinearSpace(mix(vFogColor,toGammaSpace(finalColor.rgb),fog));');
+    expect(pbr).toContain('finalColor.rgb=mix(vFogColor,finalColor.rgb,fog);');
     // Aucun autre « color » en minuscules que « color.rgb » : sinon la substitution casserait un identifiant (vFogColor est à l'abri : majuscule).
     expect(PBR_FOG_FRAGMENT.replace(/color\.rgb/g, '')).not.toContain('color');
   });

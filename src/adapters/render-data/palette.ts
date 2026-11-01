@@ -1,7 +1,9 @@
-// Palette du terrain (ADR 0009, style stylisé coloré « fantasy ») : pure, sans Babylon.
-// Couleur d'un sommet selon sa hauteur (m), sa pente (composante verticale de la normale, 1 = plat) et les
-// variations de surface tirées de la graine (plaques d'herbe, irrégularité de la limite de neige).
-// Les teintes de base (mousse, herbe, prairie, roche, neige) sont celles validées par José ; la terre s'ajoute.
+// Palette du terrain : pure, sans Babylon. Couleur d'un sommet selon sa hauteur (m), sa pente (composante verticale de la
+// normale, 1 = plat) et les variations de surface tirées de la graine (plaques d'herbe, irrégularité de la limite de neige).
+// Direction réaliste (ADR 0012, remplace les teintes vives de l'ADR 0009) : des albédos PLAUSIBLES, écrits en sRGB (le matériau
+// physique les passe en linéaire) — une herbe réelle renvoie ~15 % de la lumière, une terre ~10 %, une roche ~15-20 %, la neige
+// ~85 %. Les rapports entre teintes (creux plus sombres, prairie plus sèche, sentiers plus clairs et plus chauds, biome froid
+// pâle et bleuté) sont ceux de la palette validée ; seules la saturation et la luminosité deviennent celles du monde réel.
 // Les sentiers (core/world/paths) y ajoutent une terre claire et chaude, effacée sur les pentes, la roche et la neige.
 import { smoothstep } from '../../core/shared/math';
 
@@ -17,14 +19,14 @@ export interface SurfaceTint {
   readonly path: number;
 }
 
-const MOSS: Rgb = [0.34, 0.5, 0.16]; // creux : vert olive sombre
-const GRASS: Rgb = [0.48, 0.68, 0.22]; // herbe, vert-jaune doux (aperçus du pack nature)
-const MEADOW: Rgb = [0.66, 0.74, 0.28]; // prairie jaune-ocre des hauteurs et des plaques claires
-const DIRT: Rgb = [0.52, 0.41, 0.28]; // terre des pentes moyennes
-const COLD_GRASS: Rgb = [0.6, 0.72, 0.7]; // herbe rase du biome froid : pâle, bleutée
-const ROCK: Rgb = [0.56, 0.5, 0.46]; // roche chaude
-const SNOW: Rgb = [0.95, 0.96, 1]; // neige
-const PATH_DIRT: Rgb = [0.78, 0.64, 0.42]; // terre battue des sentiers : beige clair, plus claire et plus chaude que l'herbe et la prairie ocre
+const MOSS: Rgb = [0.25, 0.32, 0.13]; // creux : vert olive sombre
+const GRASS: Rgb = [0.33, 0.43, 0.16]; // herbe
+const MEADOW: Rgb = [0.47, 0.47, 0.22]; // prairie sèche des hauteurs et des plaques claires
+const DIRT: Rgb = [0.4, 0.32, 0.23]; // terre des pentes moyennes
+const COLD_GRASS: Rgb = [0.44, 0.49, 0.42]; // herbe rase du biome froid : pâle, bleutée
+const ROCK: Rgb = [0.47, 0.44, 0.41]; // roche grise, à peine chaude
+const SNOW: Rgb = [0.92, 0.94, 0.97]; // neige
+const PATH_DIRT: Rgb = [0.56, 0.46, 0.33]; // terre battue des sentiers : plus claire et plus chaude que l'herbe et la prairie
 
 /** Écart de luminosité des plaques d'herbe (± 18 %). */
 const PATCH_CONTRAST = 0.18;

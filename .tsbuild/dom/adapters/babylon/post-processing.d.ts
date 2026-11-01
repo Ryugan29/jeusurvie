@@ -2,26 +2,27 @@ import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import type { Scene } from '@babylonjs/core/scene';
 import { type Grade } from '../render-data/grade';
+import type { PostQuality } from '../render-data/quality';
 export declare const COLOR_GRADE: {
     /** Luminosité globale de jour (1 = inchangée). */
     readonly exposure: 1;
-    /** Contraste (1 = inchangé). */
-    readonly contrast: 1.15;
-    /** Saturation ajoutée de jour (−100 à 100) : couleurs franches des aperçus du pack. */
-    readonly saturation: 20;
+    /** Contraste (1 = inchangé) : la courbe ACES en donne déjà ; un léger supplément seulement. */
+    readonly contrast: 1.06;
+    /** Saturation ajoutée de jour (−100 à 100) : aucune, la lumière et les matières font les couleurs. */
+    readonly saturation: 0;
     /** Luminance (HDR) à partir de laquelle une zone « rayonne » : le disque du soleil et les éclairs, pas la neige au soleil de midi
      * (≈ 1,8 avant étalonnage). */
     readonly bloomThreshold: 2;
     /** Force du halo. */
-    readonly bloomWeight: 0.35;
-    /** Taille du halo (px). */
+    readonly bloomWeight: 0.28;
+    /** Taille du halo (px) par défaut (le profil graphique la fixe). */
     readonly bloomKernel: 64;
-    /** Assombrissement des coins (0 = aucun). */
-    readonly vignetteWeight: 1.2;
-    /** Renforcement des détails (0 = aucun) : faible, il durcissait les marches d'escalier des brins d'herbe. */
+    /** Assombrissement des coins (0 = aucun) : celui d'un objectif, à peine visible. */
+    readonly vignetteWeight: 0.55;
+    /** Renforcement des détails (0 = aucun) par défaut : faible, il durcissait les marches d'escalier des brins d'herbe. */
     readonly sharpen: 0.1;
-    /** Grain de film (0 à 100) : discret. */
-    readonly grain: 6;
+    /** Grain de film (0 à 100) par défaut : discret. */
+    readonly grain: 5;
 };
 /** Tone mapping : ACES (cinéma, par défaut) ; standard et neutre KHR pour comparer (?tonemap=standard|neutre). */
 export type ToneMapping = 'aces' | 'standard' | 'neutre';
@@ -29,6 +30,10 @@ export type ToneMapping = 'aces' | 'standard' | 'neutre';
 export declare function parseToneMapping(text: string | null): ToneMapping;
 export interface PostProcessingOptions {
     readonly toneMapping?: ToneMapping;
+    /** Halo, grain, netteté du profil graphique (défaut : COLOR_GRADE). */
+    readonly post?: Pick<PostQuality, 'bloomKernel' | 'grain' | 'sharpen'>;
+    /** Anticrénelage d'image (défaut : oui). */
+    readonly fxaa?: boolean;
 }
 /** Ce que l'anticrénelage touche : l'image du rendu multiple (si l'occlusion ambiante l'a créé) ou celle du pipeline. */
 export interface MsaaTargets {

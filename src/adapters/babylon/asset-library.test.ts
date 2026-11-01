@@ -4,6 +4,7 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FOLIAGE_HDR_HEADROOM } from '../render-data/foliage';
 import { normalMapFor } from '../render-data/normal-maps';
 import { toStandard, usesBakedShading, type NormalMapLoader } from './asset-library';
 import type { FoliagePlugin, WindState } from './foliage-plugin';
@@ -37,12 +38,15 @@ describe('toStandard (matériau glTF → matériau standard, vrai moteur sans ca
     expect(standard.alphaCutOff).toBeCloseTo(0.2, 6);
   });
 
-  it('feuillages et herbes : plus jaune-vert que l’écorce (aperçus du pack), auto-éclairage faible (ils prennent la lumière du sol)', () => {
+  it('feuillages et herbes : lumière divisée par la marge HDR (couleur multipliée d’autant dans le shader), reflet cireux, auto-éclairage faible', () => {
     const leaves = toStandard(pbr(Material.MATERIAL_ALPHATEST, 'Leaves_NormalTree'), scene);
     const bark = toStandard(pbr(Material.MATERIAL_ALPHATEST, 'Bark_NormalTree'), scene);
     expect(leaves.emissiveColor.g).toBeLessThan(bark.emissiveColor.g); // normales ramenées vers le haut (foliage-plugin) : à peine d’auto-éclairage, sinon vert vif la nuit
-    expect(leaves.diffuseColor.g).toBeGreaterThan(bark.diffuseColor.g);
-    expect(leaves.diffuseColor.r).toBeGreaterThan(leaves.diffuseColor.b); // chaud : vers le jaune, pas le bleu
+    expect(leaves.diffuseColor.g).toBeCloseTo(1 / FOLIAGE_HDR_HEADROOM, 6); // ADR 0012 : plus de teinte jaune-vert ajoutée, la marge seulement
+    expect(leaves.diffuseColor.r).toBeCloseTo(leaves.diffuseColor.b, 6);
+    expect(leaves.specularColor.g).toBeGreaterThan(0); // cuticule des feuilles : un reflet faible et large
+    expect(leaves.specularColor.g).toBeLessThan(0.1);
+    expect(bark.specularColor.g).toBe(0);
     for (const name of ['Grass', 'Flowers', 'Leaf_Pine_C', 'Bush_Leaves']) {
       expect(toStandard(pbr(Material.MATERIAL_ALPHATEST, name), scene).emissiveColor.g).toBeLessThan(bark.emissiveColor.g);
     }
@@ -53,7 +57,7 @@ describe('toStandard (matériau glTF → matériau standard, vrai moteur sans ca
     for (const name of ['Clover_1', 'Fern_1', 'Plant_7_Big', 'Petal_2', 'Flowers']) {
       const plant = toStandard(pbr(Material.MATERIAL_ALPHATEST, name), scene);
       expect(plant.emissiveColor.g, name).toBeLessThan(bark.emissiveColor.g);
-      expect(plant.diffuseColor.g, name).toBeGreaterThan(plant.diffuseColor.b);
+      expect(plant.diffuseColor.g, name).toBeCloseTo(1 / FOLIAGE_HDR_HEADROOM, 6);
     }
     for (const name of ['Mushrooms', 'PathRocks', 'Bark_DeadTree', 'Bark_NormalTree']) {
       expect(toStandard(pbr(Material.MATERIAL_OPAQUE, name), scene).emissiveColor.g, name).toBeCloseTo(bark.emissiveColor.g, 9);

@@ -10,3 +10,56 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1b2235; fon
 #panel[hidden] { display: none; }
 #panel p { margin: 0; }
 #panel .keys { opacity: 0.8; }
+
+/* Bouton « Réglages graphiques » sur l'écran de pause. */
+#overlay .overlay-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#overlay button.overlay-bouton { padding: 9px 18px; border-radius: 10px; border: 1px solid #5b4a2e; background: rgba(22, 18, 30, 0.88);
+  color: #e8b649; font: 600 15px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+#overlay button.overlay-bouton:hover { background: rgba(232, 182, 73, 0.16); }
+#overlay button.overlay-bouton:focus-visible { outline: 2px solid #ffd86b; outline-offset: 2px; }
+
+/* Réglages → Graphismes (maquette v1 : écran « Réglages », état « Graphismes »). */
+.reglages-voile { --or: #e8b649; --encre: #f4ecd8; --encre-2: #c9bda0; --panneau: rgba(22, 18, 30, 0.9); --bord: #5b4a2e; --focus: #ffd86b;
+  position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(10, 8, 16, 0.45); color: var(--encre); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+.reglages-voile[hidden] { display: none; }
+.reglages-voile button { font-family: inherit; }
+.reglages-voile button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.reglages-fenetre { display: grid; grid-template-columns: 190px minmax(0, 1fr); width: min(880px, 100%); max-height: min(560px, 100%);
+  border: 1px solid var(--bord); border-radius: 14px; background: var(--panneau); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); overflow: hidden; }
+.reglages-nav { display: flex; flex-direction: column; gap: 4px; padding: 14px 12px; border-right: 1px solid var(--bord); }
+.reglages-titre { margin: 4px 4px 12px; color: var(--or); font: 600 22px Georgia, serif; }
+.reglages-onglet { text-align: left; padding: 9px 10px; border: none; border-radius: 7px; background: transparent; color: var(--encre-2); cursor: pointer; font-size: 15px; }
+.reglages-onglet.actif { background: rgba(232, 182, 73, 0.14); color: var(--or); }
+.reglages-nav-pied { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.reglages-lien { padding: 0; border: none; background: none; color: var(--encre-2); text-decoration: underline; cursor: pointer; font-size: 14px; }
+.reglages-lien:hover { color: var(--or); }
+.reglages-bouton { align-self: stretch; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--bord); background: rgba(232, 182, 73, 0.1);
+  color: var(--encre); cursor: pointer; font-size: 15px; }
+.reglages-bouton:hover { background: rgba(232, 182, 73, 0.2); }
+.reglages-aide { margin: 0; font-size: 12px; color: #999; }
+.reglages-touche { display: inline-block; min-width: 20px; padding: 0 5px; border: 1px solid #777; border-bottom-width: 2px; border-radius: 4px;
+  font: 600 11px sans-serif; color: #ddd; text-align: center; }
+.reglages-contenu { padding: 16px 20px; overflow: auto; min-width: 0; }
+.reglages-ligne { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 4px 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+.reglages-libelle { font-size: 15px; }
+.reglages-selecteur { display: inline-flex; border: 1px solid var(--bord); border-radius: 9px; overflow: hidden; }
+.reglages-choix { min-width: 74px; padding: 8px 12px; border: none; border-left: 1px solid rgba(91, 74, 46, 0.6); background: transparent;
+  color: var(--encre-2); cursor: pointer; font: 600 13px "Segoe UI", system-ui, sans-serif; letter-spacing: 0.06em; }
+.reglages-choix:first-child { border-left: none; }
+.reglages-choix:hover { background: rgba(232, 182, 73, 0.12); color: var(--encre); }
+.reglages-choix.actif { background: var(--or); color: #1d1405; }
+.reglages-carte { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.3); }
+.reglages-carte-titre { margin: 0 0 4px; color: var(--or); font: 600 17px Georgia, serif; }
+.reglages-resume { margin: 0 0 8px; color: var(--encre); }
+.reglages-details { margin: 0; padding-left: 18px; color: var(--encre-2); font-size: 14px; }
+.reglages-details li { margin: 3px 0; }
+.reglages-etat { min-height: 1.45em; margin: 12px 0 0; color: var(--encre-2); font-size: 13px; }
+@media (max-width: 640px) {
+  .reglages-fenetre { grid-template-columns: 1fr; max-height: 100%; }
+  .reglages-nav { border-right: none; border-bottom: 1px solid var(--bord); }
+  .reglages-nav-pied { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .reglages-bouton { align-self: auto; }
+  .reglages-choix { min-width: 0; padding: 8px 10px; }
+}

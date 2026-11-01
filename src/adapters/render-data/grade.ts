@@ -15,8 +15,8 @@ export interface Grade {
   readonly hue: number;
 }
 
-/** Étalonnage de plein jour. */
-export const DAY_GRADE = { exposure: 1.0, saturation: 20 } as const;
+/** Étalonnage de plein jour : aucune saturation ajoutée (ADR 0012 : la lumière et les matières font les couleurs). */
+export const DAY_GRADE = { exposure: 1.0, saturation: 0 } as const;
 /** Ce que la nuit retire au plus profond (étoiles pleines). */
 const NIGHT_EXPOSURE_DROP = 0.25;
 const NIGHT_DESATURATION = 50;

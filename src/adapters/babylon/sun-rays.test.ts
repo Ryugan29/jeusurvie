@@ -12,7 +12,7 @@ import { SunRays } from './sun-rays';
 
 const CYCLE_S = DAY_LENGTH_S + NIGHT_LENGTH_S;
 const at = (fraction: number): Lighting => lightingFor(timeOfDay(fraction * CYCLE_S));
-const RAYS = qualityFor('haute').rays!;
+const RAYS = qualityFor('high').rays!;
 
 describe('SunRays (rayons de soleil à l’écran, vrai moteur sans carte graphique)', () => {
   let engine: NullEngine, scene: Scene, camera: FreeCamera;

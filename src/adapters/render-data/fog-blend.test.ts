@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { GAMMA, gammaToLinear, linearToGamma, pbrFoggedColor, standardFoggedColor } from './fog-blend';
 import type { Rgb } from './palette';
 
-/** Brume du brouillard : blanc-lavande (valeur « gamma », celle de scene.fogColor). */
+/** Brume du brouillard : blanc-lavande (scene.fogColor, linéaire comme l'horizon du ciel). */
 const FOG_COLOR: Rgb = [0.78, 0.76, 0.86];
-/** Un manteau sombre, tel que le matériau standard le calcule (valeurs « gamma »). */
+/** Un manteau sombre, écrit en sRGB (sa couleur linéaire : gammaToLinear). */
 const COAT_GAMMA: Rgb = [0.35, 0.25, 0.2];
 
 const luma = (c: Rgb): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
@@ -37,48 +37,37 @@ describe('passage gamma ↔ linéaire (courbe approchée de Babylon : puissance 
   });
 });
 
-describe('brume sur un matériau PBR = brume sur un matériau standard à la même distance', () => {
-  it('même couleur à l’écran pour n’importe quelle couleur (HDR > 1 compris), brume et visibilité', () => {
+describe('brume sur un matériau PBR = brume sur un matériau standard à la même distance (tout linéaire, ADR 0012)', () => {
+  const COAT_LINEAR = gammaToLinear(COAT_GAMMA);
+
+  it('même couleur pour n’importe quelle couleur (HDR > 1 compris), brume et visibilité', () => {
     const channel = fc.double({ min: 0, max: 4, noNaN: true });
     fc.assert(
       fc.property(
         fc.tuple(channel, channel, channel),
         fc.tuple(fc.double({ min: 0, max: 1, noNaN: true }), fc.double({ min: 0, max: 1, noNaN: true }), fc.double({ min: 0, max: 1, noNaN: true })),
         fc.double({ min: 0, max: 1, noNaN: true }),
-        (colorGamma, fogColor, visibility) => {
-          // Le standard calcule en « gamma » ; le PBR calcule en linéaire : même pixel, deux écritures.
-          const standard = standardFoggedColor(colorGamma, fogColor, visibility);
-          const pbr = pbrFoggedColor(gammaToLinear(colorGamma), fogColor, visibility);
-          expectSameColor(pbr, standard);
+        (color, fogColor, visibility) => {
+          expectSameColor(pbrFoggedColor(color, fogColor, visibility), standardFoggedColor(color, fogColor, visibility));
         },
       ),
     );
   });
 
   it('exemple du brouillard : 19 % de brume à 6 m restent 19 % de brume (et non 37 %) sur l’héroïne', () => {
-    const linear = gammaToLinear(COAT_GAMMA);
-    expectSameColor(pbrFoggedColor(linear, FOG_COLOR, 0.81), standardFoggedColor(COAT_GAMMA, FOG_COLOR, 0.81));
-    // La part de brume vue dans l’espace d’affichage est celle de la visibilité : 1 − 0,81.
-    const seen = linearToGamma(pbrFoggedColor(linear, FOG_COLOR, 0.81));
-    for (let i = 0; i < 3; i++) expect((seen[i]! - COAT_GAMMA[i]!) / (FOG_COLOR[i]! - COAT_GAMMA[i]!)).toBeCloseTo(1 - 0.81, 9);
+    const fogged = pbrFoggedColor(COAT_LINEAR, FOG_COLOR, 0.81);
+    for (let i = 0; i < 3; i++) expect((fogged[i]! - COAT_LINEAR[i]!) / (FOG_COLOR[i]! - COAT_LINEAR[i]!)).toBeCloseTo(1 - 0.81, 9);
   });
 
-  it('visibilité 1 : la couleur reste intacte ; visibilité 0 : on voit la brume, convertie en linéaire comme sur un matériau standard', () => {
-    const linear = gammaToLinear(COAT_GAMMA);
-    expectSameColor(pbrFoggedColor(linear, FOG_COLOR, 1), linear);
-    expectSameColor(pbrFoggedColor(linear, FOG_COLOR, 0), gammaToLinear(FOG_COLOR));
+  it('visibilité 1 : la couleur reste intacte ; visibilité 0 : on voit la brume telle que l’horizon du ciel l’affiche', () => {
+    expectSameColor(pbrFoggedColor(COAT_LINEAR, FOG_COLOR, 1), COAT_LINEAR);
+    expectSameColor(pbrFoggedColor(COAT_LINEAR, FOG_COLOR, 0), FOG_COLOR);
   });
 
-  it('une couleur HDR (reflet vif, 6 en linéaire) se brume comme sur un standard', () => {
-    const hdrLinear: Rgb = [6, 5, 4];
-    expectSameColor(pbrFoggedColor(hdrLinear, FOG_COLOR, 0.5), standardFoggedColor(linearToGamma(hdrLinear), FOG_COLOR, 0.5));
-  });
-
-  it('fait voir le défaut de Babylon : à 6 m, la formule d’origine rend le PBR bien plus clair que le standard', () => {
-    const linear = gammaToLinear(COAT_GAMMA);
-    const standard = standardFoggedColor(COAT_GAMMA, FOG_COLOR, 0.81);
-    const original = babylonPbrFoggedColor(linear, FOG_COLOR, 0.81);
-    expect(luma(original)).toBeGreaterThan(2 * luma(standard)); // « silhouette blanc-lavande »
-    expect(luma(pbrFoggedColor(linear, FOG_COLOR, 0.81))).toBeCloseTo(luma(standard), 9);
+  it('fait voir le défaut de Babylon : à 6 m, la formule d’origine embrume bien plus le PBR que le standard', () => {
+    const standard = standardFoggedColor(COAT_LINEAR, FOG_COLOR, 0.81);
+    const original = babylonPbrFoggedColor(COAT_LINEAR, FOG_COLOR, 0.81);
+    expect(luma(original) - luma(COAT_LINEAR)).toBeGreaterThan(1.6 * (luma(standard) - luma(COAT_LINEAR))); // ~37 % contre 19 % de brume
+    expect(luma(pbrFoggedColor(COAT_LINEAR, FOG_COLOR, 0.81))).toBeCloseTo(luma(standard), 9);
   });
 });

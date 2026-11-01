@@ -9,9 +9,9 @@ export interface Grade {
     /** Teinte ajoutée (degrés : 30 = orange au soleil bas, 220 = bleu de clair de lune). */
     readonly hue: number;
 }
-/** Étalonnage de plein jour. */
+/** Étalonnage de plein jour : aucune saturation ajoutée (ADR 0012 : la lumière et les matières font les couleurs). */
 export declare const DAY_GRADE: {
     readonly exposure: 1;
-    readonly saturation: 20;
+    readonly saturation: 0;
 };
 export declare function gradeFor(l: Lighting): Grade;

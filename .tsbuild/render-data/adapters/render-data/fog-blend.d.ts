@@ -6,12 +6,9 @@ export declare function gammaToLinear(c: Rgb): Rgb;
 /** Du linéaire vers l'espace « gamma » (écran). Valable au-delà de 1 (couleurs HDR). */
 export declare function linearToGamma(c: Rgb): Rgb;
 /**
- * Matériau STANDARD : couleur et brume en gamma, mélangées avec la visibilité (1 = net, 0 = tout dans la brume) ; le post-traitement
- * d'étalonnage passe ensuite le résultat en linéaire. Renvoie cette couleur LINÉAIRE (ce que l'étalonnage reçoit).
+ * Matériau STANDARD (végétation, repassée en linéaire par son shader) : couleur et brume linéaires, mélangées avec la visibilité
+ * (1 = net, 0 = tout dans la brume).
  */
-export declare function standardFoggedColor(colorGamma: Rgb, fogColorGamma: Rgb, visibility: number): Rgb;
-/**
- * Matériau PBR corrigé : couleur LINÉAIRE en entrée, repassée en gamma pour se mélanger à la brume comme sur un standard (même
- * visibilité, non convertie), puis remise en linéaire. Renvoie la couleur LINÉAIRE — identique, pour la même scène, à celle du standard.
- */
-export declare function pbrFoggedColor(colorLinear: Rgb, fogColorGamma: Rgb, visibility: number): Rgb;
+export declare function standardFoggedColor(colorLinear: Rgb, fogColor: Rgb, visibility: number): Rgb;
+/** Matériau PBR corrigé : exactement le même mélange linéaire que le standard (visibilité non convertie). */
+export declare function pbrFoggedColor(colorLinear: Rgb, fogColor: Rgb, visibility: number): Rgb;

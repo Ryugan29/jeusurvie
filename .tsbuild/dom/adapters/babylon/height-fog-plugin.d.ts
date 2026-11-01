@@ -8,6 +8,7 @@ export declare class HeightFogPlugin extends MaterialPluginBase {
     private fog;
     private baseY;
     private color;
+    private readonly code;
     constructor(material: Material);
     /** Réglages courants (appelés à chaque image ; aucune allocation). */
     set(fog: HeightFog, baseY: number, color: Rgb): void;

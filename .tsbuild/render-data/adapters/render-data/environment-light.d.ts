@@ -2,11 +2,11 @@ import { type Lighting } from './lighting';
 /** Plafond du réglage : 1 = le rendu d'avant (ciel pris tel quel). Le reflet ne devient jamais plus fort que ce rendu validé. */
 export declare const IBL_MAX = 1;
 /**
- * Lumière reçue par un sol plat divisée par la luminance moyenne du ciel peint, par plein jour clair à midi (0,3 du cycle, temps
- * clair) : 1,329 / 0,591 ≈ 2,25. C'est le repère « 1 » : ailleurs, le réglage vaut (lumière du sol / luminance du ciel) / 2,25.
+ * Lumière reçue par un sol plat divisée par la luminance moyenne du ciel, par plein jour clair à midi (0,3 du cycle, temps clair) :
+ * ≈ 2,54 avec le ciel réaliste de l'ADR 0012 (2,25 avec l'ancien ciel peint, plus lumineux). C'est le repère « 1 » : ailleurs, le réglage vaut (lumière du sol / luminance du ciel) / 2,25.
  * Si la palette de lumière change et que ce repère dérive, le test « plein jour clair, à midi : 1 » le signale.
  */
-export declare const CLEAR_NOON_LIGHT_PER_SKY = 2.25;
+export declare const CLEAR_NOON_LIGHT_PER_SKY = 2.536;
 /**
  * Rapport maximal visé entre la lumière d'une face verticale (reflet compris, matière de référence = la peau, matière par défaut) et celle
  * du sol. Le critère de rendu est 1,10 : on vise un peu en dessous car les cheveux et les champignons reçoivent 9 % de ciel de plus que

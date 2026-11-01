@@ -4,6 +4,8 @@
 // (quelques mètres) ou qu'un chunk entre ou sort — jamais à chaque image. Un appel de dessin par morceau de modèle.
 // Les tampons sont réutilisés (pas de Float32Array neuf à chaque refonte) et leurs limites ne sont pas recalculées :
 // le maillage est toujours « actif » (pas de test de visibilité sur la boîte de tous les brins).
+import { sameSector, type ViewSector } from '../render-data/view-sector';
+import type { CameraView } from './vegetation-renderer';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { COVER_FADE_M, COVER_RADIUS_M, shrinkInstances } from '../render-data/ground-cover-instances';
 import { vegetationVisible, type VegetationBatches } from '../render-data/vegetation-instances';
@@ -14,6 +16,8 @@ export interface GroundCoverOptions {
   readonly radiusM?: number;
   /** Largeur (m) de la bande où il rétrécit avant le bord (défaut COVER_FADE_M). */
   readonly fadeM?: number;
+  /** Part des éléments dessinés (1 = tous ; défaut 1). */
+  readonly density?: number;
   /** Déplacement (m) du joueur qui déclenche une mise à jour des tampons (défaut 2,5). */
   readonly stepM?: number;
 }
@@ -52,10 +56,14 @@ const GROWTH = 1.25;
 export class GroundCoverRenderer {
   private readonly chunks = new Map<string, ChunkCover>();
   private readonly models = new Map<string, ModelState>();
-  private readonly radiusM: number;
+  private radiusM: number;
   private readonly fadeM: number;
+  /** Part des éléments dessinés (profil graphique : render-data/quality → distances.coverDensity). */
+  private density: number;
   private readonly stepM: number;
   private lastX = Number.NaN;
+  private view: CameraView | undefined;
+  private lastSector: ViewSector | undefined;
   private lastZ = Number.NaN;
   private dirty = true;
   private rebuilds = 0;
@@ -66,11 +74,26 @@ export class GroundCoverRenderer {
   ) {
     this.radiusM = options.radiusM ?? COVER_RADIUS_M;
     this.fadeM = options.fadeM ?? COVER_FADE_M;
+    this.density = options.density ?? 1;
     this.stepM = options.stepM ?? DEFAULT_STEP_M;
   }
 
   get size(): number {
     return this.chunks.size;
+  }
+
+  /** Rayon (m) et part des éléments dessinés (profil graphique) : les tampons sont refaits à la prochaine mise à jour. */
+  setReach(radiusM: number, density: number): void {
+    const r = Number.isFinite(radiusM) && radiusM > this.fadeM ? radiusM : this.radiusM;
+    const d = Number.isFinite(density) ? Math.min(1, Math.max(0.05, density)) : 1;
+    if (r === this.radiusM && d === this.density) return;
+    this.radiusM = r;
+    this.density = d;
+    this.dirty = true;
+  }
+
+  get radius(): number {
+    return this.radiusM;
   }
 
   add(key: string, cx: number, cz: number, batches: VegetationBatches): void {
@@ -87,10 +110,16 @@ export class GroundCoverRenderer {
     if (this.chunks.delete(key)) this.dirty = true;
   }
 
-  /** À appeler à chaque image avec la position du joueur : ne refait les tampons que si c'est nécessaire. */
-  update(playerX: number, playerZ: number): void {
+  /**
+   * À appeler à chaque image avec la position du joueur : ne refait les tampons que si c'est nécessaire. `view` : seuls les éléments
+   * dans le champ de la caméra (ou tout près) sont dessinés ; refait aussi quand le cap arrondi change (render-data/view-sector).
+   */
+  update(playerX: number, playerZ: number, view?: CameraView): void {
     const moved = Math.hypot(playerX - this.lastX, playerZ - this.lastZ); // NaN avant la première fois : « déplacé »
-    if (!this.dirty && !(moved >= this.stepM) && !Number.isNaN(moved)) return;
+    const turned = !sameSector(view?.sector, this.lastSector);
+    if (!this.dirty && !turned && !(moved >= this.stepM) && !Number.isNaN(moved)) return;
+    this.view = view;
+    this.lastSector = view?.sector;
     this.rebuild(playerX, playerZ);
     this.lastX = playerX;
     this.lastZ = playerZ;
@@ -129,7 +158,7 @@ export class GroundCoverRenderer {
       let count = 0;
       for (const chunk of near) {
         const batch = chunk.batches.get(model);
-        if (batch !== undefined) count = shrinkInstances(batch, px, pz, count, this.radiusM, this.fadeM, state.buffer);
+        if (batch !== undefined) count = shrinkInstances(batch, px, pz, count, this.radiusM, this.fadeM, state.buffer, this.density, this.view);
       }
       state.count = count;
       this.apply(model, state);

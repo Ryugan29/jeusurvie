@@ -11,7 +11,7 @@ const saturation = (c: readonly number[]): number => Math.max(...c) - Math.min(.
 /** Vert nettement dominant : au moins 25 % au-dessus des autres composantes (indépendant de la luminosité). */
 const greenDominates = ([r, g, b]: readonly number[]): boolean => g! >= 1.25 * Math.max(r!, b!);
 
-describe('terrainColor (palette stylisée : herbes en plaques, terre, roche, neige des sommets)', () => {
+describe('terrainColor (palette réaliste : herbes en plaques, terre, roche, neige des sommets)', () => {
   it('donne toujours des composantes dans [0, 1]', () => {
     fc.assert(
       fc.property(height, normalY, unit, unit, (h, n, patch, snowJitter) => {
@@ -98,14 +98,14 @@ describe('terrainColor (palette stylisée : herbes en plaques, terre, roche, nei
     const onPath = { ...neutral, path: 1 };
     const mean = (c: readonly number[]): number => (c[0]! + c[1]! + c[2]!) / 3;
 
-    // Valeurs relevées après le passage aux tons chauds (herbe jaune-vert, prairie ocre, creux olive) ; terre, roche, neige inchangées.
+    // Valeurs relevées après le passage aux albédos réalistes (ADR 0012).
     it('path = 0 : rien ne change (couleurs d’avant les sentiers, à l’identique)', () => {
       const t = (patch: number, cold: number) => ({ patch, snowJitter: 0.1, cold, path: 0 });
-      expect(terrainColor(5, 1, t(0.3, 0))).toEqual([0.5352651166666667, 0.7265017055555556, 0.24166170555555558]);
-      expect(terrainColor(20, 0.84, t(-0.4, 0))).toEqual([0.52, 0.41, 0.28]);
-      expect(terrainColor(60, 0.95, t(0.8, 0.5))).toEqual([0.7207199999999999, 0.8351199999999999, 0.56056]);
-      expect(terrainColor(-10, 0.7, t(0, 1))).toEqual([0.56, 0.5, 0.46]);
-      expect(terrainColor(205, 0.9, t(0.2, 0.2))).toEqual([0.95, 0.96, 1]);
+      expect(terrainColor(5, 1, t(0.3, 0))).toEqual([0.37064397962962964, 0.45974113703703706, 0.17842170555555556]);
+      expect(terrainColor(20, 0.84, t(-0.4, 0))).toEqual([0.4, 0.32, 0.23]);
+      expect(terrainColor(60, 0.95, t(0.8, 0.5))).toEqual([0.5205199999999999, 0.5491199999999999, 0.36607999999999996]);
+      expect(terrainColor(-10, 0.7, t(0, 1))).toEqual([0.47, 0.44, 0.41]);
+      expect(terrainColor(205, 0.9, t(0.2, 0.2))).toEqual([0.92, 0.94, 0.97]);
     });
 
     it('au milieu du sentier, plat : plus chaud (rouge relevé par rapport au vert) que l’herbe voisine, partout', () => {
@@ -150,7 +150,7 @@ describe('terrainColor (palette stylisée : herbes en plaques, terre, roche, nei
       const flat = terrainColor(20, 1, onPath), gentle = terrainColor(20, 0.9, onPath), rock = terrainColor(20, 0.62, onPath);
       const noPath = (n: number) => terrainColor(20, n, neutral);
       const gap = (a: readonly number[], b: readonly number[]): number => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
-      expect(gap(flat, noPath(1))).toBeGreaterThan(0.2);
+      expect(gap(flat, noPath(1))).toBeGreaterThan(0.12); // albédos réalistes : écart plus faible qu'avec la palette vive, mais net
       expect(gap(gentle, noPath(0.9))).toBeLessThan(gap(flat, noPath(1)));
       expect(gap(rock, noPath(0.62))).toBeLessThan(0.02);
       // Dans le froid, la roche arrive plus tôt : le sentier aussi disparaît plus tôt.
@@ -185,7 +185,7 @@ describe('terrainColor (palette stylisée : herbes en plaques, terre, roche, nei
     it('plus de roche : une pente moyenne est déjà rocheuse dans le froid, pas en forêt', () => {
       const f = terrainColor(20, 0.84, neutral), c = terrainColor(20, 0.84, cold);
       expect(saturation(c)).toBeLessThan(0.14); // gris de roche
-      expect(saturation(f)).toBeGreaterThan(0.2); // terre brune en forêt
+      expect(saturation(f)).toBeGreaterThan(0.12); // terre brune en forêt
     });
 
     it('neige plus basse : à 130 m et à plat, neige dans le froid, rien en forêt', () => {

@@ -39,15 +39,13 @@ import type { WindState } from '../adapters/babylon/foliage-plugin';
 import { SceneLighting } from '../adapters/babylon/lighting';
 import { SkyEnvironment } from '../adapters/babylon/sky-environment';
 import { glowingMaterials, NightMagicRenderer } from '../adapters/babylon/night-magic-renderer';
-import { createAmbientOcclusion } from '../adapters/babylon/ambient-occlusion';
-import { applyGrade, createPostProcessing, enableMsaa, parseToneMapping } from '../adapters/babylon/post-processing';
-import { LensDrops } from '../adapters/babylon/lens-drops';
+import { parseToneMapping } from '../adapters/babylon/post-processing';
+import { RenderPipeline } from '../adapters/babylon/render-pipeline';
 import { WetSurfaces } from '../adapters/babylon/wet-surfaces';
 import { RainRenderer } from '../adapters/babylon/rain-renderer';
-import { SunRays } from '../adapters/babylon/sun-rays';
 import { LocomotionAnimator } from '../adapters/babylon/locomotion-animator';
 import { ShadowProxies } from '../adapters/babylon/shadow-proxies';
-import { SunShadows } from '../adapters/babylon/sun-shadows';
+import { browserStorage, GraphicsPreferencesStore } from '../adapters/storage/graphics-preferences';
 import { TerrainRenderer } from '../adapters/babylon/terrain-renderer';
 import { createFarTerrainWorker, FarTerrainRenderer } from '../adapters/babylon/far-terrain-renderer';
 import { GroundCoverRenderer } from '../adapters/babylon/ground-cover-renderer';
@@ -61,28 +59,52 @@ import { hazeColor } from '../adapters/render-data/fog';
 import { gradeFor } from '../adapters/render-data/grade';
 import { lensRainTarget, stepLensWetness } from '../adapters/render-data/lens-drops';
 import { lightingFor } from '../adapters/render-data/lighting';
-import { describeQuality, parseQuality } from '../adapters/render-data/quality';
+import {
+  QUALITY_DESCRIPTIONS,
+  QUALITY_LEVELS,
+  describeQuality,
+  isQualityLevel,
+  levelFromUrl,
+  overridesFromUrl,
+  resolveQuality,
+  type QualityLevel,
+  type QualitySettings,
+} from '../adapters/render-data/quality';
 import { COVER_RADIUS_M } from '../adapters/render-data/ground-cover-instances';
 import { SHADOW_CASTER_MODELS } from '../adapters/render-data/shadow-casters';
 import { VEGETATION_MODELS } from '../adapters/render-data/vegetation-instances';
+import { viewSectorFor } from '../adapters/render-data/view-sector';
 import { createChunkWorker } from '../adapters/worker/create-chunk-workers';
 import { WorkerChunkSource } from '../adapters/worker/worker-chunk-source';
 import { setTextIfChanged } from '../ui/dom/set-if-changed';
+import { GraphicsSettingsPanel } from '../ui/settings/graphics-settings-panel';
 
 // --- Réglages de la démo (lus dans l'adresse : ?seed=123&view=512&heure=nuit&x=-3500&z=-2000) ----------------
 const params = new URLSearchParams(location.search);
 const SEED = parseSeed(params.get('seed'));
-const STREAM = { viewRadiusM: clampInt(params.get('view'), 192, 1024, 512), unloadMarginM: CHUNK_SIZE, maxChunks: 400 };
-const VIEW_RADIUS_M = effectiveViewRadius(STREAM.viewRadiusM, STREAM.maxChunks);
+/** ?view=<m> : rayon des chunks détaillés imposé (sinon celui du profil graphique). */
+const VIEW_OVERRIDE_M = params.get('view') === null ? undefined : clampInt(params.get('view'), 192, 1024, 512);
+const STREAM = { viewRadiusM: 512, unloadMarginM: CHUNK_SIZE, maxChunks: 520 };
 /** Moments de la journée (fraction du cycle) : touches 1 à 4, ou ?heure=matin|midi|crepuscule|nuit. */
 const MOMENTS: Readonly<Record<string, number>> = { matin: 0.06, midi: 0.3, crepuscule: 0.64, nuit: 0.85 };
 const MOMENT_KEYS: Readonly<Record<string, string>> = { Digit1: 'matin', Digit2: 'midi', Digit3: 'crepuscule', Digit4: 'nuit' };
 /** ?couvert=0 : sans couvre-sol (herbe, fleurs, cailloux…) ; ?couvert=<m> : rayon de rendu en mètres (défaut COVER_RADIUS_M). */
 const COVER_PARAM = params.get('couvert');
 const COVER_ENABLED = COVER_PARAM !== '0';
-const COVER_RADIUS = clampInt(COVER_PARAM, 20, 120, COVER_RADIUS_M);
-/** ?qualite=basse|moyenne|haute (défaut haute) et interrupteurs ?ombres=0 ?ao=0 ?rayons=0 ?nuages=0 : voir render-data/quality. */
-const QUALITY = parseQuality((name) => params.get(name));
+const COVER_RADIUS_OVERRIDE = COVER_PARAM === null || COVER_PARAM === '0' ? undefined : clampInt(COVER_PARAM, 20, 120, COVER_RADIUS_M);
+// Profil graphique : celui enregistré par le joueur (Réglages → Graphismes), sinon HIGH. ?qualite=low|medium|high|ultra (ou les anciens
+// basse|moyenne|haute) l'impose pour cette visite sans l'enregistrer ; les interrupteurs ?ombres=0 ?ao=0 ?ssr=0 ?rayons=0 ?brume=0
+// ?dof=0 ?flou=0 ?aa=0 ?pluie=0 coupent un effet (render-data/quality) ; ?nuages=0 : nuages plats.
+const graphicsStore = new GraphicsPreferencesStore(browserStorage());
+let graphicsPrefs = graphicsStore.load();
+const URL_LEVEL = levelFromUrl((name) => params.get(name));
+const URL_OVERRIDES = overridesFromUrl((name) => params.get(name));
+const FLAT_CLOUDS = params.get('nuages') === '0';
+function resolveGraphics(level: QualityLevel): QualitySettings {
+  const q = resolveQuality(level, { ...graphicsPrefs.overrides, ...URL_OVERRIDES });
+  return FLAT_CLOUDS ? { ...q, sky: { ...q.sky, clouds: 'flat' } } : q;
+}
+let QUALITY = resolveGraphics(URL_LEVEL ?? graphicsPrefs.level);
 /** ?vent=0 : herbe, fleurs et feuillages immobiles (pour comparer et mesurer le coût du vent). */
 const WIND: WindState = {
   timeS: 0,
@@ -103,6 +125,8 @@ let realClockS = 0;
 /** L'horloge du vent reboucle (s) : les sinus du shader gardent leur précision (un léger raccord par heure de jeu). */
 const WIND_LOOP_S = 3600;
 const MAX_NEW_CHUNKS_PER_FRAME = 4;
+/** ?elagage=0 : végétation et couvre-sol dessinés tout autour, même hors du champ (pour mesurer le gain de l'élagage). */
+const CULL_ENABLED = params.get('elagage') !== '0';
 /** Marge (m) au-delà de la distance d'ombre : un arbre juste hors portée peut encore jeter son ombre jusque dans la portée. */
 const SHADOW_MARGIN_M = 40;
 /** Rayon (m) du décor qui cache le soleil pour les rayons, quand il n'y a pas d'ombres pour en fixer un. */
@@ -154,7 +178,7 @@ const panel = byId<HTMLDivElement>('panel');
 const fpsLine = byId<HTMLParagraphElement>('fps');
 const infoLine = byId<HTMLParagraphElement>('info');
 const coverLine = byId<HTMLParagraphElement>('cover');
-setTextIfChanged(byId('seed'), `Graine : ${SEED} · distance de vue : ${Math.round(VIEW_RADIUS_M)} m · ${describeQuality(QUALITY)}`);
+const seedLine = byId<HTMLParagraphElement>('seed');
 
 // --- Scène ---------------------------------------------------------------------------------------------------
 // Brume des matériaux PBR (personnages, roches) identique à celle du sol : AVANT le premier matériau compilé.
@@ -164,58 +188,74 @@ const scene = new Scene(engine);
 scene.skipPointerMovePicking = true;
 const camera = new FreeCamera('camera', new Vector3(0, 30, -10), scene);
 camera.minZ = 0.1;
-// Relief lointain (?lointain=0 : sans) : le vrai terrain, grossier, jusqu'à FAR_HALF_SIZE_M autour du joueur, au-delà des chunks.
-const FAR_ENABLED = params.get('lointain') !== '0';
-const FAR_HALF_SIZE_M = 4000;
-const FAR_STEP_M = 40;
-camera.maxZ = FAR_ENABLED ? FAR_HALF_SIZE_M * 1.6 : VIEW_RADIUS_M * 3;
 camera.fov = 1.0;
+// Relief lointain (?lointain=0 : sans) : le vrai terrain, grossier, sur plusieurs kilomètres autour du joueur, au-delà des chunks ;
+// son étendue et son pas viennent du profil graphique.
+const FAR_ENABLED = params.get('lointain') !== '0';
+/** Distances du profil : rayon des chunks, relief lointain (null : sans), distance de brume, rayon du ciel, plan lointain. */
+function distancesOf(q: QualitySettings) {
+  const viewRadiusM = effectiveViewRadius(VIEW_OVERRIDE_M ?? q.distances.viewRadiusM, STREAM.maxChunks);
+  const far = FAR_ENABLED ? q.distances.farTerrain : null;
+  const reach = far ? far.halfSizeM : viewRadiusM;
+  return { viewRadiusM, far, fogDistanceM: reach, skyRadiusM: far ? reach * 1.45 : reach * 1.2, maxZ: far ? reach * 1.6 : reach * 3 };
+}
+let distances = distancesOf(QUALITY);
+STREAM.viewRadiusM = distances.viewRadiusM;
+camera.maxZ = distances.maxZ;
 const lighting = new SceneLighting(scene, {
-  viewRadiusM: VIEW_RADIUS_M,
+  viewRadiusM: distances.viewRadiusM,
   fogDistanceFraction: 1,
   heightFogBaseY: -6,
   domeSegments: 32,
   // Avec le relief lointain, la brume se règle sur les kilomètres visibles : le proche reste net, les chaînes pâlissent au loin.
-  ...(FAR_ENABLED ? { fogDistanceM: FAR_HALF_SIZE_M, skyRadiusM: FAR_HALF_SIZE_M * 1.45 } : {}),
-  clouds: QUALITY.clouds,
+  fogDistanceM: distances.fogDistanceM,
+  skyRadiusM: distances.skyRadiusM,
+  clouds: QUALITY.sky.clouds,
 });
-// Éclairage d'environnement (IBL) des matériaux PBR, tiré du ciel de l'heure (?ibl=0 : sans).
-const skyEnvironment = params.get('ibl') !== '0' ? new SkyEnvironment(scene, lighting.sky.mesh, { size: 128, refreshS: 0.5 }) : undefined;
-// Occlusion ambiante (?ao=0 : sans) AVANT l'étalonnage : elle s'applique à l'image brute. ?post=0 : sans étalonnage (pour comparer
-// l'aspect et mesurer son coût).
-if (QUALITY.ao) createAmbientOcclusion(scene, camera, QUALITY.ao);
-// Rayons de soleil (?rayons=0 : sans), aussi avant l'étalonnage. Ils ne tiennent compte que du décor PROCHE (les « doubles » de
-// shadow-proxies), du terrain et des personnages : ni le ciel, ni l'herbe, ni les arbres lointains (trop chers pour des rais
-// qu'on ne distingue pas). `notOccluders` se remplit au chargement des modèles.
+// Éclairage d'environnement (IBL) des matériaux PBR, tiré du ciel de l'heure (?ibl=0 : sans) ; taille et fréquence : profil graphique.
+const IBL_ENABLED = params.get('ibl') !== '0';
+let skyEnvironment = IBL_ENABLED ? new SkyEnvironment(scene, lighting.sky.mesh, { size: QUALITY.sky.envProbeSize, refreshS: QUALITY.sky.envProbeRefreshS }) : undefined;
+// Rayons de soleil : ils ne tiennent compte que du décor PROCHE (les « doubles » de shadow-proxies), du terrain et des personnages :
+// ni le ciel, ni l'herbe, ni les arbres lointains (trop chers pour des rais qu'on ne distingue pas). `notOccluders` se remplit au
+// chargement des modèles.
 const notOccluders = new Set<AbstractMesh>();
-const rays = QUALITY.rays ? new SunRays(scene, camera, QUALITY.rays, (mesh) => mesh !== lighting.sky.mesh && !notOccluders.has(mesh)) : undefined;
-// ?tonemap=standard|neutre : autre « développement » de l'image, pour comparer à ACES (défaut).
-const grading = params.get('post') !== '0' ? createPostProcessing(scene, camera, { toneMapping: parseToneMapping(params.get('tonemap')) }) : undefined;
-// Gouttes sur l'objectif quand il pleut (?gouttes=0 : sans) : dernière passe de l'image, accrochée seulement s'il y a des gouttes.
-const lensDrops = params.get('gouttes') !== '0' ? new LensDrops(scene, camera, grading) : undefined;
+// Chaîne de rendu (ombres, occlusion, reflets, atmosphère, rayons, développement, gouttes) : TOUT vient du profil graphique.
+// ?post=0 : sans développement (pour comparer) ; ?tonemap=standard|neutre : autre tone mapping ; ?gouttes=0 : sans gouttes.
+const pipeline = new RenderPipeline(scene, camera, lighting.sun, {
+  toneMapping: parseToneMapping(params.get('tonemap')),
+  grading: params.get('post') !== '0',
+  lensDrops: params.get('gouttes') !== '0',
+  isRayOccluder: (mesh) => mesh !== lighting.sky.mesh && !notOccluders.has(mesh),
+  devicePixelRatio: () => window.devicePixelRatio,
+  setAerialPerspective: (enabled) => lighting.setAerialPerspective(enabled),
+});
 let lensWetness = 0;
 // Roches, écorces, personnages : plus sombres et luisants sous la pluie.
 const wetSurfaces = new WetSurfaces(scene);
-// MSAA de l'image de la scène (?aa=0 : sans) : bords des objets, des brins et des feuilles lissés.
-enableMsaa({ prePassRenderer: scene.prePassRenderer, pipeline: grading }, QUALITY.image.msaa);
-const terrain = new TerrainRenderer(scene);
-// Pluie autour de la caméra (nombre de gouttes selon la qualité ; ?pluie=0 : aucune).
-const rain = new RainRenderer(scene, QUALITY.rainDrops);
+const terrain = new TerrainRenderer(scene, QUALITY.terrain);
+// Pluie autour de la caméra (nombre de gouttes selon le profil ; ?pluie=0 : aucune).
+let rain = new RainRenderer(scene, QUALITY.rainDrops);
 lighting.addHeightFog(terrain.material);
-const far = FAR_ENABLED
-  ? new FarTerrainRenderer(
-      scene,
-      SEED,
-      { halfSizeM: FAR_HALF_SIZE_M, stepM: FAR_STEP_M, innerRadiusM: VIEW_RADIUS_M - CHUNK_SIZE, recenterM: 500, sinkM: 2 },
-      createFarTerrainWorker(),
-    )
-  : undefined;
-if (far) lighting.addHeightFog(far.material);
+function createFar(d: ReturnType<typeof distancesOf>): FarTerrainRenderer | undefined {
+  if (!d.far) return undefined;
+  const renderer = new FarTerrainRenderer(
+    scene,
+    SEED,
+    { halfSizeM: d.far.halfSizeM, stepM: d.far.stepM, innerRadiusM: d.viewRadiusM - CHUNK_SIZE, recenterM: 500, sinkM: 2 },
+    createFarTerrainWorker(),
+  );
+  lighting.addHeightFog(renderer.material);
+  return renderer;
+}
+let far = createFar(distances);
 // Végétation : modèles glTF chargés une fois (?vegetation=0 : sans, pour comparer la fluidité).
 const library = new AssetLibrary(scene, '/assets/models/nature/', WIND);
 const vegetation = new VegetationRenderer(library);
+vegetation.setRangeScale(QUALITY.distances.vegetationRange);
 // Couvre-sol : herbe, trèfles, fleurs, fougères, champignons, cailloux autour du joueur (purement visuel, sans collision).
-const cover = COVER_ENABLED ? new GroundCoverRenderer(library, { radiusM: COVER_RADIUS }) : undefined;
+const cover = COVER_ENABLED
+  ? new GroundCoverRenderer(library, { radiusM: COVER_RADIUS_OVERRIDE ?? QUALITY.distances.coverRadiusM, density: QUALITY.distances.coverDensity })
+  : undefined;
 let vegetationLoaded = false;
 if (params.get('vegetation') !== '0') {
   setTextIfChanged(overlayText, 'Chargement des arbres, des rochers et de l’herbe…');
@@ -226,25 +266,72 @@ if (params.get('vegetation') !== '0') {
     console.error('Modèles de végétation illisibles : le jeu continue sans.', error);
   }
 }
-// Ombres en cascade du soleil (?ombres=0 : sans, pour mesurer leur coût) : le décor PROCHE et les personnages projettent ; le sol,
-// le couvre-sol, le décor et les personnages reçoivent. L'herbe ne projette pas (render-data/shadow-casters). Le décor proche
-// projette par des « doubles » qui ne portent que les instances à portée d'ombre (adapters/babylon/shadow-proxies).
 // Nuit fantasy (?magie=0 : sans) : lucioles autour du joueur, champignons qui luisent.
 const nightMagic = params.get('magie') !== '0' ? new NightMagicRenderer(scene, glowingMaterials(scene.materials)) : undefined;
-const shadows = QUALITY.shadows ? new SunShadows(lighting.sun, camera, QUALITY.shadows) : undefined;
+// Ombres en cascade du soleil : le décor PROCHE et les personnages projettent ; le sol, le couvre-sol, le décor et les personnages
+// reçoivent. L'herbe ne projette pas (render-data/shadow-casters). Le décor proche projette par des « doubles » qui ne portent que les
+// instances à portée d'ombre (adapters/babylon/shadow-proxies) ; leur rayon suit la portée des ombres du profil.
+/** Rayon (m) des doubles : portée des ombres + marge, ou, sans ombres, le décor qui cache le soleil pour les rayons. */
+const proxyRadiusOf = (q: QualitySettings): number => (q.shadows ? q.shadows.rangeM + SHADOW_MARGIN_M : RAYS_OCCLUDER_RADIUS_M);
 let shadowProxies: ShadowProxies | undefined;
 if (vegetationLoaded) {
   for (const key of new Set([...Object.values(VEGETATION_MODELS).flat(), ...(cover ? Object.values(GROUND_COVER_MODELS).flat() : [])])) {
     for (const part of library.partsOf(key)) {
-      shadows?.addReceiver(part);
+      part.receiveShadows = true;
       notOccluders.add(part); // les gros blocs (jusqu'à 600 m) ne cachent rien : seuls les doubles proches comptent
     }
   }
-  if (shadows || rays) {
-    const radiusM = (QUALITY.shadows?.rangeM ?? 0) + SHADOW_MARGIN_M + (QUALITY.shadows ? 0 : RAYS_OCCLUDER_RADIUS_M);
-    shadowProxies = new ShadowProxies(library, vegetation, SHADOW_CASTER_MODELS, { radiusM, stepM: 8 }, (proxy) => shadows?.addCaster(proxy));
-  }
+  shadowProxies = new ShadowProxies(library, vegetation, SHADOW_CASTER_MODELS, { radiusM: proxyRadiusOf(QUALITY), stepM: 8 }, (proxy) =>
+    pipeline.addShadowCaster(proxy),
+  );
 }
+pipeline.apply(QUALITY);
+let forceReplan = false;
+
+/**
+ * Applique un profil graphique à chaud (réglages, ou capture automatisée) : chaîne de rendu, distances, ciel, sol, végétation, pluie.
+ * Ce qui coûte (textures du sol refaites, shaders recompilés) n'est refait que si ça change.
+ */
+function applyGraphics(q: QualitySettings): void {
+  const before = QUALITY;
+  QUALITY = q;
+  const d = distancesOf(q);
+  if (d.viewRadiusM !== distances.viewRadiusM || JSON.stringify(d.far) !== JSON.stringify(distances.far)) {
+    if (far) {
+      lighting.removeHeightFog(far.material);
+      far.dispose();
+    }
+    far = createFar(d);
+  }
+  distances = d;
+  STREAM.viewRadiusM = d.viewRadiusM;
+  forceReplan = true;
+  camera.maxZ = d.maxZ;
+  lighting.setDistances(d.fogDistanceM, d.skyRadiusM);
+  lighting.setCloudQuality(q.sky.clouds);
+  if (IBL_ENABLED && (q.sky.envProbeSize !== before.sky.envProbeSize || q.sky.envProbeRefreshS !== before.sky.envProbeRefreshS)) {
+    skyEnvironment?.dispose();
+    skyEnvironment = new SkyEnvironment(scene, lighting.sky.mesh, { size: q.sky.envProbeSize, refreshS: q.sky.envProbeRefreshS });
+  }
+  terrain.setQuality(q.terrain);
+  vegetation.setRangeScale(q.distances.vegetationRange);
+  cover?.setReach(COVER_RADIUS_OVERRIDE ?? q.distances.coverRadiusM, q.distances.coverDensity);
+  if (q.rainDrops !== before.rainDrops) {
+    rain.dispose();
+    rain = new RainRenderer(scene, q.rainDrops);
+  }
+  pipeline.apply(q);
+  shadowProxies?.setRadius(proxyRadiusOf(q));
+  showQualityLine();
+}
+function showQualityLine(): void {
+  setTextIfChanged(
+    seedLine,
+    `Graine : ${SEED} · distance de vue : ${Math.round(distances.viewRadiusM)} m · ${describeQuality(QUALITY)}` +
+      (pipeline.msaaSamples !== QUALITY.image.msaa && QUALITY.image.msaa > 1 ? ` (MSAA ${pipeline.msaaSamples}× sur cette carte)` : ''),
+  );
+}
+showQualityLine();
 const capsule = CreateCapsule('perso', { ...CAPSULE_OPTIONS }, scene);
 const CAPSULE_MIN_Y = capsuleMinY(CAPSULE_OPTIONS);
 const capsuleMaterial = new StandardMaterial('perso', scene);
@@ -291,11 +378,11 @@ if (params.get('personnages') !== '0') {
   else console.error('Démon illisible : la scène continue sans lui.', demonResult.reason);
 }
 if (heroine) capsule.setEnabled(false);
-else shadows?.addCaster(capsule);
+else pipeline.addShadowCaster(capsule);
 for (const model of [heroine?.model, demon]) {
   for (const mesh of model?.meshes ?? []) {
-    shadows?.addCaster(mesh);
-    shadows?.addReceiver(mesh);
+    pipeline.addShadowCaster(mesh);
+    mesh.receiveShadows = true;
   }
 }
 
@@ -356,9 +443,41 @@ gpuTimer.captureGPUFrameTime = true;
 let frameDrawCalls = 0;
 let panelTimerMs = 0;
 
-overlay.addEventListener('click', () => input.requestPointerLock());
+// --- Réglages → Graphismes : profil LOW / MEDIUM / HIGH / ULTRA, appliqué à chaud et enregistré ------------------------------
+const graphicsPanel = new GraphicsSettingsPanel(document, {
+  presets: QUALITY_LEVELS.map((id) => ({ id, ...QUALITY_DESCRIPTIONS[id] })),
+  onSelect: (id) => selectPreset(id),
+  onReset: () => {
+    graphicsPrefs = graphicsStore.reset();
+    selectPreset(graphicsPrefs.level, 'réglages par défaut rétablis');
+  },
+  onClose: () => graphicsPanel.close(),
+});
+document.body.append(graphicsPanel.element);
+graphicsPanel.setActive(QUALITY.level, URL_LEVEL ? 'Profil imposé par l’adresse de la page (non enregistré).' : '');
+/** Choix d'un profil : appliqué tout de suite (la ligne d'état s'affiche d'abord : l'application peut prendre un instant), puis enregistré. */
+function selectPreset(id: string, note?: string): void {
+  if (!isQualityLevel(id)) return;
+  const label = QUALITY_DESCRIPTIONS[id].label;
+  graphicsPanel.setActive(id, `Application du profil ${label}…`);
+  setTimeout(() => {
+    graphicsPrefs = { ...graphicsPrefs, level: id };
+    const saved = graphicsStore.save(graphicsPrefs);
+    applyGraphics(resolveGraphics(id));
+    const where = saved ? 'appliqué et enregistré' : 'appliqué (enregistrement impossible : stockage du navigateur indisponible)';
+    graphicsPanel.setActive(id, `Profil ${label} ${where}${note ? ` — ${note}` : ''}.`);
+  }, 30);
+}
+byId<HTMLButtonElement>('open-graphics').addEventListener('click', (e) => {
+  e.stopPropagation(); // le clic ne doit pas reprendre la partie
+  graphicsPanel.open();
+});
+
+overlay.addEventListener('click', () => {
+  if (!graphicsPanel.isOpen) input.requestPointerLock();
+});
 canvas.addEventListener('click', () => {
-  if (mode !== 'Playing') input.requestPointerLock();
+  if (mode !== 'Playing' && !graphicsPanel.isOpen) input.requestPointerLock();
 });
 
 function showMode(): void {
@@ -369,6 +488,60 @@ function showMode(): void {
   );
 }
 showMode();
+
+// --- Captures automatisées (?capture=1 seulement) : comparer des images à caméra et lumière identiques ----------------------
+// L'image est lue juste après scene.render(), dans la même tâche : la toile n'a pas besoin de garder son image (pas de
+// preserveDrawingBuffer), et une capture d'écran du navigateur ne peut plus tomber sur une image à moitié dessinée.
+interface CaptureHook {
+  afterRender(): void;
+}
+let captureHook: CaptureHook | undefined;
+if (params.get('capture') === '1') {
+  let pending: { framesLeft: number; resolve: (url: string) => void } | undefined;
+  let renderedFrames = 0;
+  captureHook = {
+    afterRender() {
+      renderedFrames++;
+      if (pending === undefined || --pending.framesLeft > 0) return;
+      const { resolve } = pending;
+      pending = undefined;
+      resolve(canvas.toDataURL('image/png'));
+    },
+  };
+  Object.assign(window, {
+    __spike: {
+      /** Image après `frames` images rendues (laisse les effets temporels converger). */
+      capture: (frames = 1): Promise<string> => new Promise<string>((resolve) => (pending = { framesLeft: Math.max(1, frames), resolve })),
+      setMoment: (name: string): void => {
+        const at = MOMENTS[name];
+        if (at !== undefined) session.setTimeOfDay(at);
+      },
+      setWeather: (kind: string | null): void => {
+        weatherOverride = kind !== null && (WEATHER_KINDS as readonly string[]).includes(kind) ? (kind as WeatherKind) : undefined;
+      },
+      setLook: (yaw: number, pitch: number, distance?: number): void => {
+        rig = { yaw, pitch, distance: distance ?? rig.distance };
+      },
+      chunks: (): number => terrain.size,
+      setPreset: (level: string): void => {
+        if (isQualityLevel(level)) {
+          applyGraphics(resolveGraphics(level));
+          graphicsPanel.setActive(level, '');
+        }
+      },
+      stats: (): string => {
+        const f = fps.stats();
+        const c = cover?.stats();
+        return (
+          `${describeQuality(QUALITY)} · ${f.fps > 0 ? (1000 / f.fps).toFixed(0) : '?'} ms/image · ${frameDrawCalls} appels · ` +
+          `${scene.getActiveMeshes().length} maillages actifs${c ? ` · couvre-sol ${c.instances} instances` : ''}`
+        );
+      },
+      /** Images rendues depuis le chargement (le logiciel de rendu compile lentement : on attend qu'elles s'enchaînent). */
+      frames: (): number => renderedFrames,
+    },
+  });
+}
 
 engine.runRenderLoop(() => {
   const frameMs = engine.getDeltaTime();
@@ -384,6 +557,10 @@ engine.runRenderLoop(() => {
     if (code === 'Digit5') session.timeScale = session.timeScale === 1 ? 60 : 1;
     if (code === 'Digit6') weatherOverride = nextWeatherOverride(weatherOverride);
     if (code === 'KeyF') panel.hidden = !panel.hidden;
+    if (code === 'KeyO') {
+      input.releasePointerLock(); // la souris revient au joueur pour les réglages
+      graphicsPanel.open();
+    }
   }
   const running = simulationRuns(mode);
   if (running) rig = applyZoom(applyLook(rig, raw.look.dx, raw.look.dy, MOUSE_SENSITIVITY), raw.wheel);
@@ -402,7 +579,8 @@ engine.runRenderLoop(() => {
 
   // Streaming : plan recalculé seulement au changement de chunk ou de mode ; intégration ≤ N chunks par image.
   const here = session.current;
-  if (replan.shouldReplan(here.x, here.z, mode)) {
+  if (replan.shouldReplan(here.x, here.z, mode) || forceReplan) {
+    forceReplan = false;
     for (const gone of loading.applyPlan(planStreaming(here.x, here.z, loading.loaded, STREAM), here.x, here.z)) {
       terrain.remove(gone.key);
       vegetation.remove(gone.key);
@@ -414,10 +592,14 @@ engine.runRenderLoop(() => {
     vegetation.add(chunk.key, chunk.data.cx, chunk.data.cz, chunk.render.vegetation);
     cover?.add(chunk.key, chunk.data.cx, chunk.data.cz, chunk.render.groundCover);
   }
-  vegetation.update(here.x, here.z);
+  // Élagage par secteur de vue (?elagage=0 : sans, pour mesurer) : la végétation hors du champ de la caméra n'est pas dessinée.
+  const view = CULL_ENABLED
+    ? { sector: viewSectorFor(rig.yaw, camera.fov, engine.getAspectRatio(camera)), x: camera.position.x, z: camera.position.z }
+    : undefined;
+  vegetation.update(here.x, here.z, view);
   far?.update(here.x, here.z);
   shadowProxies?.update(here.x, here.z);
-  cover?.update(here.x, here.z);
+  cover?.update(here.x, here.z, view);
 
   // Rendu interpolé entre les deux derniers ticks.
   const shown = session.interpolated(alpha);
@@ -455,20 +637,26 @@ engine.runRenderLoop(() => {
   }
   lighting.apply(atmosphere, time, frameMs / 1000);
   terrain.setWetness(atmosphere.wetness);
-  terrain.setSkyReflection(hazeColor(light), light.skyZenith, atmosphere.rain, realClockS);
+  terrain.setRain(atmosphere.rain, realClockS);
   wetSurfaces.apply(atmosphere.wetness);
   far?.setWetness(atmosphere.wetness);
+  far?.setHaze(hazeColor(light));
   rain.update({ rain: atmosphere.rain, wind: atmosphere.wind, brightness: sceneBrightness(light) }, camera.position.x, camera.position.y, camera.position.z);
   lensWetness = stepLensWetness(lensWetness, lensRainTarget(atmosphere.rain, rig.pitch), frameMs / 1000);
-  lensDrops?.update(lensWetness, realClockS);
   skyEnvironment?.update(frameMs / 1000, camera.position.x, camera.position.y, camera.position.z);
   skyEnvironment?.setIntensity(iblIntensityFor(light)); // le reflet du ciel baisse avec le soleil (?ibl=0 : pas de sonde, rien à régler)
-  shadows?.update(light);
-  rays?.update(light);
-  if (grading) applyGrade(grading, weatherGrade(gradeFor(light), atmosphere));
+  pipeline.update({
+    light,
+    grade: weatherGrade(gradeFor(light), atmosphere),
+    aerial: lighting.aerialState,
+    wetness: atmosphere.wetness,
+    lensWetness,
+    timeS: realClockS,
+  });
   const callsBefore = engine._drawCalls.current;
   scene.render();
   frameDrawCalls = engine._drawCalls.current - callsBefore; // le compteur de Babylon cumule : on mesure l'image
+  captureHook?.afterRender();
 
   panelTimerMs += frameMs;
   if (panelTimerMs > 250 && !panel.hidden) {
@@ -489,7 +677,7 @@ engine.runRenderLoop(() => {
       coverLine,
       c === undefined
         ? 'Couvre-sol : coupé (?couvert=0)'
-        : `Couvre-sol ${COVER_RADIUS} m : ${c.instances} instances · ${(c.triangles / 1e6).toFixed(2)} M triangles · ${c.drawCalls} appels · ` +
+        : `Couvre-sol ${Math.round(cover?.radius ?? 0)} m : ${c.instances} instances · ${(c.triangles / 1e6).toFixed(2)} M triangles · ${c.drawCalls} appels · ` +
             `${frameDrawCalls} appels au total`,
     );
   }

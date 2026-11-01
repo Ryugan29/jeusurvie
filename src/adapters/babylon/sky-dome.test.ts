@@ -7,7 +7,7 @@ import { DAY_LENGTH_S, NIGHT_LENGTH_S } from '../../core/config/balance';
 import { timeOfDay } from '../../core/survival/time-of-day';
 import { hazeColor } from '../render-data/fog';
 import { lightingFor, skyColorAt, type Lighting } from '../render-data/lighting';
-import { SKY_FRAGMENT, SKY_SUN_DISC_HDR, SkyDome } from './sky-dome';
+import { CLOUD_MODES, SKY_FRAGMENT, SKY_SUN_DISC_HDR, SkyDome } from './sky-dome';
 
 const CYCLE_S = DAY_LENGTH_S + NIGHT_LENGTH_S;
 const at = (fraction: number): Lighting => lightingFor(timeOfDay(fraction * CYCLE_S));
@@ -116,8 +116,23 @@ describe('SkyDome (dôme de ciel peint, vrai moteur sans carte graphique)', () =
     expect(SKY_FRAGMENT.match(/starLayer\(/g)!.length).toBeGreaterThanOrEqual(4); // définition + au moins trois couches
   });
 
-  it('nuages réglables : actifs par défaut, coupés par l’option (qualité basse, ?nuages=0)', () => {
-    expect(new SkyDome(scene, { radiusM: RADIUS, segments: 16 }).cloudsEnabled).toBe(true);
-    expect(new SkyDome(scene, { radiusM: RADIUS, segments: 16, clouds: false }).cloudsEnabled).toBe(false);
+  it('nuages selon le profil : en couches par défaut, plats (LOW, ?nuages=0) ou en volume (ULTRA) — un define du shader', () => {
+    const dome = new SkyDome(scene, { radiusM: RADIUS, segments: 16 });
+    const defines = (): string[] => (dome.mesh.material as ShaderMaterial).options.defines;
+    expect(dome.cloudQuality).toBe('layered');
+    expect(defines()).toContain(`CLOUD_MODE ${CLOUD_MODES.layered}`);
+    dome.setCloudQuality('volumetric');
+    expect(dome.cloudQuality).toBe('volumetric');
+    expect(defines()).toContain(`CLOUD_MODE ${CLOUD_MODES.volumetric}`);
+    expect(defines().filter((d) => d.startsWith('CLOUD_MODE'))).toHaveLength(1);
+    expect(new SkyDome(scene, { radiusM: RADIUS, segments: 16, clouds: 'flat' }).cloudQuality).toBe('flat');
+    for (const part of ['volumetricClouds(', 'cloudDensity(', 'hgPhase(', '#if CLOUD_MODE == 2']) expect(SKY_FRAGMENT).toContain(part);
+  });
+
+  it('setRadius : le dôme suit la distance d’affichage du profil (mise à l’échelle, rien n’est refait)', () => {
+    const dome = new SkyDome(scene, { radiusM: RADIUS, segments: 16 });
+    dome.setRadius(RADIUS * 2);
+    expect(dome.mesh.scaling.x).toBeCloseTo(2, 9);
+    expect(dome.mesh.scaling.y).toBeCloseTo(2, 9);
   });
 });

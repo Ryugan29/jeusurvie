@@ -10,8 +10,10 @@ import {
   GRASS_HEIGHT_SCALE,
   coverScaleAt,
   groundCoverInstances,
+  coverKept,
   shrinkInstances,
 } from './ground-cover-instances';
+import { viewSectorFor } from './view-sector';
 
 const item = (over: Partial<CoverItem> = {}): CoverItem => ({ kind: 'grass', model: 'Grass_Common_Short', x: 10, z: 20, rotation: 0, scale: 1, ...over });
 /** Une matrice d'instance (16 nombres) à la position (x, z), d'échelle s : de quoi reconnaître la translation et la taille. */
@@ -162,5 +164,34 @@ describe('shrinkInstances (instances d’un lot → celles qui sont à portée d
   it('un tampon trop petit n’est jamais dépassé : le surplus est ignoré', () => {
     const out = new Float32Array(16 * 2);
     expect(shrinkInstances(src, 0, 0, 0, 70, 25, out)).toBe(2);
+  });
+});
+
+describe('shrinkInstances : densité et secteur de vue (profils graphiques, élagage)', () => {
+  const at = (pts: readonly (readonly [number, number])[]): Float32Array => {
+    const m = new Float32Array(pts.length * 16);
+    pts.forEach(([x, z], i) => m.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, 0, z, 1], i * 16));
+    return m;
+  };
+
+  it('secteur de vue : devant gardé, derrière et loin écarté, tout près gardé', () => {
+    const src = at([[0, 30], [0, -30], [0, -5]]);
+    const out = new Float32Array(src.length);
+    const view = { sector: viewSectorFor(0, 1, 16 / 9), x: 0, z: 0 };
+    expect(shrinkInstances(src, 0, 0, 0, 70, 25, out, 1, view)).toBe(2);
+    expect(out[14]).toBe(30);
+    expect(out[16 + 14]).toBe(-5);
+  });
+
+  it('densité : une part fixe des éléments, toujours les mêmes (aucun scintillement)', () => {
+    const pts: [number, number][] = [];
+    for (let i = 0; i < 400; i++) pts.push([(i % 20) * 1.7 - 17, Math.floor(i / 20) * 1.7 - 17]);
+    const src = at(pts);
+    const out = new Float32Array(src.length);
+    const half = shrinkInstances(src, 0, 0, 0, 70, 25, out, 0.5);
+    expect(half).toBeGreaterThan(150);
+    expect(half).toBeLessThan(250);
+    for (const [x, z] of pts) expect(coverKept(x, z, 0.5)).toBe(coverKept(x, z, 0.5));
+    expect(shrinkInstances(src, 0, 0, 0, 70, 25, out, 1)).toBe(400);
   });
 });
