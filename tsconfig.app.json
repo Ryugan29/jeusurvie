@@ -1,0 +1,14 @@
+{
+  // Orchestration (src/app) : pure comme le cœur, ni DOM ni Node ; n'importe que le cœur.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "rootDir": "src/app",
+    "outDir": ".tsbuild/app",
+    "tsBuildInfoFile": ".tsbuild/app.tsbuildinfo"
+  },
+  "references": [{ "path": "./tsconfig.core.json" }],
+  "include": ["src/app/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "**/__lint_fixtures__/**"]
+}

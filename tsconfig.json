@@ -1,0 +1,12 @@
+{
+  // Racine : `tsc -b` construit chaque couche avec ses propres règles (project references).
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.core.json" },
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.render-data.json" },
+    { "path": "./tsconfig.dom.json" },
+    { "path": "./tsconfig.worker.json" },
+    { "path": "./tsconfig.test.json" }
+  ]
+}

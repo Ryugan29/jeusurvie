@@ -1,0 +1,15 @@
+{
+  // Données de rendu pures (adapters/render-data) et protocole du worker : ni DOM, ni Node, ni WebWorker.
+  // Ce code tourne dans le worker ET sur la page : il ne doit dépendre d'aucune des deux.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "rootDir": "src",
+    "outDir": ".tsbuild/render-data",
+    "tsBuildInfoFile": ".tsbuild/render-data.tsbuildinfo"
+  },
+  "references": [{ "path": "./tsconfig.core.json" }],
+  "include": ["src/adapters/render-data/**/*.ts", "src/adapters/worker/chunk-protocol.ts"],
+  "exclude": ["src/**/*.test.ts", "**/__lint_fixtures__/**"]
+}

@@ -1,0 +1,24 @@
+{
+  // Navigateur : adapters (Babylon, DOM, workers côté page), ui, spike. Voit le DOM, pas Node.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "rootDir": "src",
+    "outDir": ".tsbuild/dom",
+    "tsBuildInfoFile": ".tsbuild/dom.tsbuildinfo"
+  },
+  "references": [
+    { "path": "./tsconfig.core.json" },
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.render-data.json" }
+  ],
+  "include": ["src/adapters/**/*.ts", "src/ui/**/*.ts", "src/spike/**/*.ts"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.worker.ts",
+    "src/adapters/render-data/**",
+    "src/adapters/worker/chunk-protocol.ts",
+    "**/__lint_fixtures__/**"
+  ]
+}

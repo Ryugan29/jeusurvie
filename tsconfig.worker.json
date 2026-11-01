@@ -1,0 +1,14 @@
+{
+  // Points d'entrée des Web Workers : portée globale d'un worker (WebWorker), pas de DOM.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
+    "rootDir": "src",
+    "outDir": ".tsbuild/worker",
+    "tsBuildInfoFile": ".tsbuild/worker.tsbuildinfo"
+  },
+  "references": [{ "path": "./tsconfig.core.json" }, { "path": "./tsconfig.render-data.json" }],
+  "include": ["src/**/*.worker.ts"],
+  "exclude": ["**/__lint_fixtures__/**"]
+}

@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — jeu de survie</title>
+<style>
+  :root {
+    --or: #e8b649; --or-sombre: #a87a22; --encre: #f4ecd8; --encre-2: #c9bda0;
+    --panneau: rgba(22, 18, 30, .88); --panneau-bord: #5b4a2e; --fond: #0e0c14;
+    --vie: #d9483b; --faim: #d98b3b; --chaud: #e8673b; --froid: #5aa9e6; --endurance: #9ad15a;
+    --ok: #5fc27a; --ko: #e05252; --focus: #ffd86b; --neutre: #8a8496;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--encre); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  button { font-family: inherit; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* Barre de la maquette (pas dans le jeu) */
+  .maquette-nav { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    padding: 8px 12px; background: #1b1b22; border-bottom: 1px solid #333; font-size: 13px; }
+  .maquette-nav strong { margin-right: 8px; color: #aaa; font-weight: 600; }
+  .maquette-nav button { background: #2a2a34; color: #ddd; border: 1px solid #444; border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 13px; }
+  .maquette-nav button.actif { background: var(--or); color: #1a1408; border-color: var(--or); }
+  .etats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; background: #15151b; border-bottom: 1px solid #2a2a2a; font-size: 13px; min-height: 36px; }
+  .etats span { color: #888; margin-right: 4px; }
+  .etats button { background: transparent; color: #ccc; border: 1px dashed #555; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
+  .etats button.actif { border-style: solid; border-color: var(--or); color: var(--or); }
+  .note { margin-left: auto; color: #777; font-style: italic; }
+
+  /* Écran toujours dessiné en 1280×720 puis réduit pour tenir, comme un vrai jeu */
+  .ecran-wrap { padding: 16px; display: flex; justify-content: center; }
+  .ecran-cadre { position: relative; width: min(1280px, 100%); aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; border: 1px solid #333; }
+  .ecran { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden; background: #000; user-select: none; }
+  .ecran > section { position: absolute; inset: 0; display: none; }
+  .ecran > section.visible { display: block; }
+
+  /* Décor 3D simulé (formes provisoires) */
+  .scene { position: absolute; inset: 0; background: linear-gradient(#7ec3f0 0%, #b9e0f5 45%, #f7e3b5 58%, #6aa65a 58%, #4b8a45 100%); }
+  .scene::before { content: ""; position: absolute; left: 0; right: 0; top: 40%; height: 26%;
+    background: radial-gradient(60% 100% at 20% 100%, #4f7f63 60%, transparent 61%),
+                radial-gradient(50% 90% at 70% 100%, #5f8f6b 60%, transparent 61%),
+                radial-gradient(40% 70% at 95% 100%, #46775a 60%, transparent 61%); }
+  .scene .arbre { position: absolute; width: 0; height: 0; border-left: 26px solid transparent; border-right: 26px solid transparent; border-bottom: 80px solid #2f6b3a; }
+  .scene .arbre::after { content: ""; position: absolute; left: -5px; top: 80px; width: 10px; height: 22px; background: #5a3b22; }
+  .scene .brume { position: absolute; left: 0; right: 0; top: 46%; height: 18%; background: linear-gradient(transparent, rgba(255,255,255,.35), transparent); }
+  .scene .perso { position: absolute; left: 50%; bottom: 14%; width: 34px; height: 70px; margin-left: -17px; border-radius: 16px 16px 8px 8px;
+    background: linear-gradient(#c8a46a, #7a5a35); box-shadow: 0 6px 0 rgba(0,0,0,.25); }
+  .scene .perso::before { content: ""; position: absolute; left: 7px; top: -18px; width: 20px; height: 20px; border-radius: 50%; background: #e2c19a; }
+  .scene.crepuscule { background: linear-gradient(#41356e 0%, #c76b4a 45%, #f2a65a 58%, #4b6a3c 58%, #314f2c 100%); }
+  .scene.froid { background: linear-gradient(#a9c4d8 0%, #dbe8f0 50%, #eef3f6 58%, #dfe9ef 58%, #c4d3dc 100%); }
+  .scene.froid .arbre { border-bottom-color: #44685a; }
+  .scene.nuit { background: linear-gradient(#0b1430 0%, #1a2550 50%, #2a2e55 58%, #1b3326 58%, #12261c 100%); }
+  .scene.nuit::before { filter: brightness(.45); }
+  .scene.nuit .arbre { border-bottom-color: #173822; }
+  .scene.nuit .brume { background: linear-gradient(transparent, rgba(120,140,200,.18), transparent); }
+  .lueur-feu { position: absolute; left: 41%; bottom: 8%; width: 220px; height: 140px; border-radius: 50%; background: radial-gradient(rgba(255,170,60,.55), transparent 70%); }
+  .feu { position: absolute; left: calc(41% + 98px); bottom: 15%; width: 22px; height: 26px; border-radius: 50% 50% 40% 40%; background: radial-gradient(#ffe08a, #ff7a2e 60%, #b93a12); }
+  .monstre { position: absolute; width: 40px; height: 52px; border-radius: 40% 40% 20% 20%; background: #3b1f4a; box-shadow: 0 0 14px #b14bff88; }
+  .monstre::before, .monstre::after { content: ""; position: absolute; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: #ff5b5b; box-shadow: 0 0 6px #f00; }
+  .monstre::before { left: 10px; } .monstre::after { right: 10px; }
+  .palissade { position: absolute; left: 60%; bottom: 14%; width: 150px; height: 70px;
+    background: repeating-linear-gradient(90deg, #7a5530 0 16px, #5e3f22 16px 19px); clip-path: polygon(0 20%, 5% 0, 10% 20%, 15% 0, 20% 20%, 25% 0, 30% 20%, 35% 0, 40% 20%, 45% 0, 50% 20%, 55% 0, 60% 20%, 65% 0, 70% 20%, 75% 0, 80% 20%, 85% 0, 90% 20%, 95% 0, 100% 20%, 100% 100%, 0 100%); }
+  .tombe { position: absolute; left: 47%; bottom: 20%; width: 40px; height: 50px; border-radius: 20px 20px 4px 4px; background: #8d8a93; box-shadow: 0 0 18px rgba(255,210,140,.7); }
+  .coffre-3d { position: absolute; left: 58%; bottom: 16%; width: 60px; height: 40px; border-radius: 6px; background: linear-gradient(#8a5a2c, #5a3a1a); border: 3px solid #c99a3a; }
+
+  /* Composants d'interface */
+  .panneau { background: var(--panneau); border: 1px solid var(--panneau-bord); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .titre-jeu { font-family: Georgia, "Times New Roman", serif; letter-spacing: .04em; color: var(--or); text-shadow: 0 2px 0 #3a2808, 0 0 18px rgba(232,182,73,.35); }
+  .btn { display: block; width: 100%; padding: 11px 16px; margin: 7px 0; border-radius: 9px; border: 1px solid var(--panneau-bord);
+    background: linear-gradient(#3a2e46, #2a2134); color: var(--encre); font-size: 16px; text-align: left; cursor: pointer; }
+  .btn:hover { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .btn.principal { background: linear-gradient(#c99a3a, #8f6a1f); color: #1d1405; border-color: var(--or); font-weight: 600; }
+  .btn.discret { background: transparent; }
+  .btn.centre-txt { text-align: center; }
+  .btn small { float: right; color: var(--encre-2); font-size: 12px; margin-top: 3px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn.principal small { color: #3a2a0a; }
+  .champ { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid #6b5a3c; background: #15111c; color: var(--encre); font-size: 15px; }
+  label { display: block; margin: 12px 0 4px; color: var(--encre-2); font-size: 13px; }
+  .centre { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .voile { position: absolute; inset: 0; background: rgba(5, 4, 10, .6); }
+  .touche { display: inline-block; min-width: 24px; padding: 1px 6px; border-radius: 5px; border: 1px solid #c9bda0; border-bottom-width: 3px;
+    font: 600 13px/19px "Segoe UI", sans-serif; text-align: center; color: var(--encre); background: #2a2232; }
+  .msg { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 10px 0; }
+  .msg.erreur { background: rgba(224,82,82,.14); border: 1px solid #a33; }
+  .msg.info { background: rgba(90,169,230,.12); border: 1px solid #3f78a5; }
+  .msg.ok { background: rgba(95,194,122,.14); border: 1px solid #3f8a55; }
+  .lien { background: none; border: none; color: var(--or); cursor: pointer; font-size: 14px; padding: 6px 8px; min-height: 32px; }
+  .lien.danger { color: #ff8f8f; }
+  .mini-btn { padding: 7px 13px; min-height: 34px; border-radius: 7px; border: 1px solid var(--or); background: var(--or); color: #1d1405; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .mini-btn[disabled] { background: transparent; color: #8b7d60; border-color: #5b4a2e; cursor: not-allowed; }
+  .progression { height: 10px; border-radius: 5px; background: rgba(255,255,255,.12); overflow: hidden; margin: 12px 0 6px; }
+  .progression i { display: block; height: 100%; background: linear-gradient(90deg, var(--or-sombre), var(--or)); }
+
+  /* Icônes provisoires (le jeu aura son propre jeu d'icônes) */
+  .ic { display: inline-grid; place-items: center; width: 1.3em; height: 1.3em; font-style: normal; }
+  .ic-pierre::before { content: "✦"; color: #9fd3ff; text-shadow: 0 0 6px #5aa9e6; }
+  .ic-pierre.eteinte::before { color: #777; text-shadow: none; }
+  .ic-foyer::before { content: "🔥"; }
+  .ic-tombe::before { content: "🪦"; }
+  .ic-ruine::before { content: "🏚"; }
+  .ic-epingle::before { content: "📍"; }
+
+  /* HUD : jauges */
+  .hud-jauges { position: absolute; left: 20px; bottom: 20px; display: grid; gap: 8px; }
+  .jauge { display: grid; grid-template-columns: 30px 200px; align-items: center; gap: 9px; }
+  .jauge .ico { width: 30px; height: 30px; display: grid; place-items: center; font-size: 17px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.25); }
+  .jauge .barre { position: relative; height: 14px; border-radius: 7px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.25); overflow: hidden; }
+  .jauge .barre i { position: absolute; inset: 0; transform-origin: 0 50%; }
+  .jauge .tendance { position: absolute; right: -22px; top: -4px; font-size: 13px; }
+  .jauge.vie .ico { border-radius: 50%; } .jauge.vie i { background: var(--vie); }
+  .jauge.faim .ico { border-radius: 3px; } .jauge.faim i { background: repeating-linear-gradient(90deg, var(--faim) 0 10px, #b9712c 10px 12px); }
+  .jauge.chaleur .ico { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); border: none; background: rgba(0,0,0,.75); }
+  .jauge.chaleur i { background: var(--chaud); }
+  .jauge.chaleur.froid i { background: repeating-linear-gradient(135deg, var(--froid) 0 6px, #3d86c4 6px 9px); }
+  .jauge.critique .barre { height: 18px; border: 2px solid var(--ko); }
+  .jauge.critique { animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .jauge-wrap { position: relative; }
+
+  /* HUD : barre rapide */
+  .barre-rapide { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 5px; }
+  .case { position: relative; width: 52px; height: 52px; border-radius: 8px; background: rgba(0,0,0,.58); border: 1px solid rgba(255,255,255,.24);
+    display: grid; place-items: center; font-size: 22px; }
+  .case b { position: absolute; left: 4px; top: 1px; font-size: 12px; color: var(--encre-2); font-weight: 600; }
+  .case em { position: absolute; right: 4px; bottom: 1px; font-size: 12px; font-style: normal; font-weight: 600; }
+  .case.choisie { border: 2px solid var(--or); box-shadow: 0 0 10px rgba(232,182,73,.6); }
+  .case.vide-sac { opacity: .45; }
+
+  /* HUD : mini-carte avec anneau horaire, heure dessous */
+  .mm-wrap { position: absolute; right: 18px; top: 14px; width: 162px; height: 162px; border-radius: 50%;
+    background: conic-gradient(#f2c94c 0 56%, #e98a3c 56% 66%, #2b3a6b 66% 96%, #f2c94c 96% 100%); padding: 6px; }
+  .mm-wrap .astre { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px; border-radius: 50%;
+    transform: rotate(var(--t, 90deg)) translateY(-78px); background: #fff3b0; box-shadow: 0 0 8px #ffd34d, 0 0 0 2px #000; }
+  .mm-wrap .astre.lune { background: #dfe6ff; box-shadow: 0 0 8px #9fb4ff, 0 0 0 2px #000; }
+  .minimap { position: relative; width: 150px; height: 150px; border-radius: 50%; overflow: hidden; border: 1px solid #000;
+    background: radial-gradient(circle at 70% 20%, #cfe3ef 0 18%, transparent 19%),
+                radial-gradient(circle at 30% 70%, #3f7a45 0 30%, transparent 31%),
+                radial-gradient(circle at 75% 75%, #5c8f4f 0 25%, transparent 26%),
+                linear-gradient(160deg, #a9c9d8 0%, #6f9a5e 40%, #4d8048 100%); }
+  .minimap .brouillard { position: absolute; inset: 0; background: radial-gradient(circle at 48% 55%, transparent 0 34%, rgba(12,10,18,.92) 46%); }
+  .minimap.nuit .brouillard { background: radial-gradient(circle at 50% 50%, rgba(10,14,30,.35) 0 22%, rgba(12,10,18,.94) 34%); }
+  .minimap .joueur { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -9px 0 0 -7px;
+    border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 18px solid #fff; filter: drop-shadow(0 0 2px #000); transform: rotate(var(--cap, 0deg)); }
+  .minimap .pt { position: absolute; font-size: 15px; transform: translate(-50%, -50%); text-shadow: 0 0 3px #000, 0 0 3px #000; }
+  .minimap .ennemi { position: absolute; width: 11px; height: 11px; background: var(--ko); border: 2px solid #fff; transform: translate(-50%, -50%) rotate(45deg); }
+  .minimap .nord { position: absolute; left: 50%; top: 3px; transform: translateX(-50%); font: 700 12px sans-serif; color: #ff7b6b; text-shadow: 0 1px 2px #000; }
+  .heure { position: absolute; right: 18px; top: 182px; width: 162px; text-align: center; font-size: 14px; text-shadow: 0 1px 3px #000; line-height: 1.3; }
+  .heure .assaut { display: block; color: #ffb0a2; font-weight: 600; font-size: 13px; }
+
+  /* HUD : boussole */
+  .boussole { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: 440px; height: 44px; overflow: hidden;
+    border-radius: 8px; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.2);
+    -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+  .boussole .graduations { position: absolute; left: 0; right: 0; top: 26px; height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 1px, transparent 1px 22px); }
+  .boussole .cap { position: absolute; top: 4px; transform: translateX(-50%); font-weight: 700; font-size: 15px; color: var(--encre); }
+  .boussole .cap.nord { color: #ff7b6b; }
+  .boussole .cap.petit { font-size: 12px; color: var(--encre-2); top: 6px; }
+  .boussole .marque { position: absolute; bottom: 2px; transform: translateX(-50%); font-size: 14px; text-align: center; line-height: 1; }
+  .boussole .marque small { display: block; font-size: 12px; color: var(--encre); font-weight: 600; }
+  .boussole::after { content: ""; position: absolute; left: 50%; top: 0; width: 2px; height: 10px; margin-left: -1px; background: var(--or); }
+  .boussole .direction-assaut { position: absolute; bottom: 4px; transform: translateX(-50%); color: #ff9b8a; font-size: 12px; font-weight: 700; }
+
+  /* HUD : aides et retours d'action */
+  .objectifs { position: absolute; right: 18px; top: 230px; width: 270px; padding: 10px 12px; font-size: 14px; }
+  .objectifs h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--or); }
+  .objectifs ul { margin: 0; padding: 0; } .objectifs li { list-style: none; margin: 4px 0; }
+  .objectifs .fait { color: #8bbf8f; text-decoration: line-through; }
+  .objectifs .plus-tard { color: #999; }
+  .reticule { position: absolute; left: 50%; top: 46%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.5); }
+  .invite { position: absolute; left: 50%; top: 52%; transform: translateX(-50%); padding: 7px 13px; border-radius: 8px; background: rgba(0,0,0,.68); font-size: 15px; white-space: nowrap; }
+  .invite .coups { display: inline-block; width: 70px; height: 6px; margin-left: 8px; vertical-align: middle; border-radius: 3px; background: rgba(255,255,255,.2); overflow: hidden; }
+  .invite .coups i { display: block; width: 66%; height: 100%; background: var(--or); }
+  .gain { position: absolute; left: calc(50% + 30px); top: 39%; font-size: 18px; font-weight: 700; color: #ffe2a8; text-shadow: 0 1px 3px #000; }
+  .gain small { display: block; font-size: 12px; color: var(--encre-2); font-weight: 600; }
+  .toast { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); padding: 8px 16px; border-radius: 8px; background: rgba(20,40,24,.85); border: 1px solid #3f8a55; font-size: 15px; }
+  .toast.erreur { background: rgba(60,16,16,.88); border-color: #a33; }
+  .indice { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); padding: 8px 16px; border-radius: 20px; background: rgba(20,14,6,.8);
+    border: 1px solid var(--or-sombre); font-size: 15px; color: #ffe2a8; white-space: nowrap; }
+  .indice.alerte { border-color: #a33; color: #ffb3b3; }
+  .commandes { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); display: flex; gap: 18px; padding: 10px 16px; border-radius: 10px; background: rgba(0,0,0,.6); font-size: 14px; }
+  .degat-dir { position: absolute; left: 50%; top: 50%; width: 360px; height: 360px; margin: -180px; border-radius: 50%;
+    border: 12px solid transparent; border-left-color: rgba(224,60,60,.8); transform: rotate(-20deg); }
+  .alerte-attaque { position: absolute; left: calc(50% - 215px); top: calc(50% - 32px); font-size: 14px; color: #ffb3b3; font-weight: 700; text-shadow: 0 1px 2px #000; }
+  .endurance-arc { position: absolute; left: calc(50% + 26px); bottom: calc(14% + 40px); width: 34px; height: 34px; border-radius: 50%;
+    background: conic-gradient(var(--endurance) 0 62%, rgba(0,0,0,.4) 62% 100%); -webkit-mask: radial-gradient(transparent 55%, #000 56%); mask: radial-gradient(transparent 55%, #000 56%); }
+  .vie-cible { position: absolute; left: 25%; top: 40%; width: 110px; text-align: center; font-size: 13px; font-weight: 600; text-shadow: 0 1px 2px #000; }
+  .vie-cible .b { height: 8px; margin-top: 3px; border-radius: 4px; background: rgba(0,0,0,.6); border: 1px solid #000; overflow: hidden; }
+  .vie-cible .b i { display: block; height: 100%; width: 40%; background: var(--ko); }
+  .touche-coup { position: absolute; left: 28%; top: 50%; font-size: 26px; font-weight: 800; color: #fff; text-shadow: 0 0 6px #f80, 0 1px 2px #000; }
+  .etat-construction { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); width: 190px; text-align: center; font-size: 14px; text-shadow: 0 1px 2px #000; }
+  .etat-construction .b { height: 8px; margin: 4px 0 6px; border-radius: 4px; background: rgba(0,0,0,.6); overflow: hidden; }
+  .etat-construction .b i { display: block; height: 100%; width: 35%; background: var(--or); }
+  .sauvegarde { position: absolute; left: 20px; top: 16px; font-size: 13px; color: var(--encre-2); display: flex; gap: 6px; align-items: center; text-shadow: 0 1px 2px #000; }
+  .sauvegarde::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--or); border-top-color: transparent; animation: tourne 1s linear infinite; }
+  @keyframes tourne { to { transform: rotate(360deg); } }
+
+  /* Fenêtres (inventaire, coffre, réglages) */
+  .fenetre { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 84%; height: 82%; display: grid; grid-template-rows: auto 1fr auto; }
+  .onglets { display: flex; gap: 4px; padding: 10px 14px 0; border-bottom: 1px solid var(--panneau-bord); }
+  .onglets button { padding: 8px 16px; border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; background: transparent; color: var(--encre-2); cursor: pointer; font-size: 15px; }
+  .onglets button.actif { background: rgba(232,182,73,.12); border-color: var(--panneau-bord); color: var(--or); }
+  .onglets button kbd { font: 600 11px sans-serif; color: #888; margin-left: 4px; }
+  .onglets .fermer { margin-left: auto; color: var(--encre-2); align-self: center; font-size: 13px; }
+  .pied { padding: 8px 14px; border-top: 1px solid rgba(255,255,255,.08); font-size: 13px; color: var(--encre-2); }
+  .corps { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; padding: 14px; overflow: hidden; }
+  .grille { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; align-content: start; }
+  .grille .case { width: auto; height: auto; aspect-ratio: 1; }
+  .detail { padding: 12px; border-radius: 10px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.1); }
+  .detail h3 { margin: 0 0 4px; color: var(--or); font-family: Georgia, serif; }
+  .recettes { display: grid; gap: 6px; align-content: start; overflow: auto; }
+  .recette { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 8px; border-radius: 9px; border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.25); }
+  .recette .case { width: 44px; height: 44px; }
+  .recette.impossible { opacity: .62; }
+  .recette .ingr { font-size: 13px; color: var(--encre-2); }
+  .recette .manque { color: #ff8f8f; font-weight: 600; } .recette .manque::before { content: "✗ "; }
+  .recette .ok::before { content: "✓ "; color: var(--ok); }
+  .carnet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px; }
+  .carnet .bloc { padding: 12px; border-radius: 10px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.1); }
+  .carnet h4 { margin: 0 0 8px; color: var(--or); }
+  .carnet li { list-style: none; margin: 5px 0; font-size: 14px; }
+  .carnet ul { margin: 0; padding: 0; }
+  .carnet .inconnu { color: #777; }
+  .deux-grilles { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; padding: 14px; align-items: start; }
+  .deux-grilles h4 { margin: 0 0 8px; color: var(--or); }
+  .fleches { display: grid; gap: 8px; align-self: center; }
+
+  /* Pose d'objet */
+  .fantome { position: absolute; left: 56%; bottom: 13%; width: 120px; height: 80px; border-radius: 6px 6px 0 0; display: grid; place-items: center; font-size: 30px; font-weight: 800; }
+  .fantome.valide { background: rgba(120,200,255,.32); border: 2px solid #8fd3ff; color: #e6f6ff; }
+  .fantome.invalide { background: rgba(224,82,82,.32); border: 3px dashed var(--ko); color: #fff; }
+  .pose-info { position: absolute; left: calc(56% + 130px); bottom: 18%; width: 240px; padding: 10px 12px; font-size: 14px; }
+  .pose-info h4 { margin: 0 0 6px; color: var(--or); }
+  .raison { color: #ff9d9d; font-weight: 600; } .raison::before { content: "✗ "; }
+  .aide-touches { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 14px; font-size: 14px; padding: 6px 12px; border-radius: 8px; background: rgba(0,0,0,.6); white-space: nowrap; }
+
+  /* Carte en grand */
+  .carte { position: absolute; left: 20%; top: 6%; width: 56%; height: 74%; border-radius: 12px; overflow: hidden; border: 2px solid #6d6578;
+    background: radial-gradient(ellipse 30% 22% at 72% 22%, #dbe9f1 0 70%, transparent 72%),
+                radial-gradient(ellipse 22% 18% at 82% 30%, #c7dbe6 0 70%, transparent 72%),
+                radial-gradient(ellipse 25% 30% at 30% 65%, #3c7443 0 70%, transparent 72%),
+                radial-gradient(ellipse 20% 20% at 55% 75%, #4f8649 0 70%, transparent 72%),
+                linear-gradient(150deg, #9fc0cf 0%, #78a067 38%, #5a8a4f 70%, #4a7a43 100%); }
+  .carte.attaque { border-color: var(--ko); animation: bord 0.6s infinite; }
+  @keyframes bord { 50% { box-shadow: 0 0 0 6px rgba(224,82,82,.6); } }
+  .carte .brouillard { position: absolute; inset: 0; background: radial-gradient(ellipse 48% 56% at 52% 50%, transparent 0 72%, rgba(12,10,18,.94) 100%); }
+  .carte .pt { position: absolute; font-size: 20px; transform: translate(-50%, -50%); text-shadow: 0 0 3px #000, 0 0 3px #000; }
+  .carte .lieu { position: absolute; transform: translate(-50%, 8px); font-size: 13px; white-space: nowrap; color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+  .carte .biome { position: absolute; font: italic 600 16px Georgia, serif; color: rgba(255,255,255,.85); text-shadow: 0 1px 4px #000; letter-spacing: .06em; }
+  .carte .joueur { position: absolute; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 22px solid #fff;
+    filter: drop-shadow(0 0 3px #000); transform: translate(-50%, -50%) rotate(-20deg); }
+  .carte .ennemi { position: absolute; width: 13px; height: 13px; background: var(--ko); border: 2px solid #fff; transform: translate(-50%, -50%) rotate(45deg); }
+  .carte .echelle { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #000; }
+  .carte .echelle i { display: block; width: 100px; height: 4px; margin-bottom: 3px; background: #fff; box-shadow: 0 1px 2px #000; }
+  .carte-cote { position: absolute; right: 2%; top: 6%; width: 20%; padding: 14px 16px; font-size: 14px; }
+  .carte-cote h3 { margin: 0 0 8px; color: var(--or); font-family: Georgia, serif; }
+  .carte-cote ul { margin: 0 0 12px; padding: 0; } .carte-cote li { list-style: none; margin: 5px 0; display: flex; gap: 8px; align-items: center; }
+  .carte-cote .sep { border-top: 1px solid rgba(255,255,255,.1); margin: 10px 0; }
+  .fleche-legende { display: inline-block; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 15px solid #fff; margin: 0 4px; }
+  .zoom-btns { position: absolute; right: 12px; top: 12px; display: grid; gap: 4px; }
+  .zoom-btns button { width: 34px; height: 34px; border-radius: 7px; border: 1px solid #fff8; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .zoom-btns button.actif { background: var(--or); color: #1d1405; }
+
+  /* Listes de mondes */
+  .monde { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 12px; margin: 6px 0; border-radius: 9px; border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.25); }
+  .monde h4 { margin: 0; font-size: 16px; } .monde p { margin: 0; font-size: 13px; color: var(--encre-2); }
+  .monde .actions { grid-row: span 2; display: flex; gap: 4px; align-items: center; }
+  .monde.illisible { opacity: .75; border-color: #a33; }
+
+  /* Réglages */
+  .reglages { display: grid; grid-template-columns: 190px 1fr; height: 100%; }
+  .reglages nav { border-right: 1px solid var(--panneau-bord); padding: 12px; display: flex; flex-direction: column; }
+  .reglages nav button.onglet-r { display: block; width: 100%; text-align: left; padding: 9px 10px; margin-bottom: 3px; border-radius: 7px; border: none; background: transparent; color: var(--encre-2); cursor: pointer; font-size: 15px; }
+  .reglages nav button.actif { background: rgba(232,182,73,.14); color: var(--or); }
+  .reglages .contenu { padding: 14px 18px; overflow: auto; }
+  .ligne { display: grid; grid-template-columns: 1fr 260px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 14px; }
+  .ligne .val { display: grid; grid-template-columns: 1fr 44px; gap: 8px; align-items: center; }
+  .ligne .val output { text-align: right; color: var(--encre-2); }
+  .ligne input[type=range] { width: 100%; accent-color: var(--or); }
+  .ligne.ecoute { background: rgba(232,182,73,.1); }
+  .selecteur { display: inline-flex; border: 1px solid var(--panneau-bord); border-radius: 8px; overflow: hidden; }
+  .selecteur button { padding: 6px 12px; border: none; background: transparent; color: var(--encre-2); cursor: pointer; font-size: 13px; }
+  .selecteur button.actif { background: var(--or); color: #1d1405; font-weight: 600; }
+
+  /* Annotations de la maquette */
+  .annot { max-width: 1280px; margin: 0 auto 30px; padding: 0 16px; color: #aaa; font-size: 14px; }
+  .annot h2 { color: #ddd; font-size: 17px; margin: 6px 0; }
+  .annot ul { margin: 6px 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<div class="maquette-nav" id="nav"><strong>Maquette v1 — écrans :</strong></div>
+<div class="etats" id="etats"></div>
+
+<div class="ecran-wrap"><div class="ecran-cadre" id="cadre"><div class="ecran" id="ecran">
+
+  <!-- TITRE -->
+  <section data-ecran="titre" data-nom="Titre" data-etats="Avec sauvegarde|Première fois|.exe">
+    <div class="scene"><div class="brume"></div>
+      <div class="arbre" style="left:12%;bottom:22%"></div><div class="arbre" style="left:18%;bottom:18%;transform:scale(1.3)"></div>
+      <div class="arbre" style="left:82%;bottom:20%;transform:scale(1.2)"></div></div>
+    <div class="voile" style="background:linear-gradient(90deg, rgba(8,6,14,.88) 0 38%, transparent 70%)"></div>
+    <div style="position:absolute;left:7%;top:12%;width:340px">
+      <h1 class="titre-jeu" style="font-size:44px;margin:0 0 4px">NOM DU JEU</h1>
+      <p style="margin:0 0 28px;color:var(--encre-2)">Survis. Explore. Fais grandir ton Foyer.</p>
+      <button class="btn principal" data-si="Avec sauvegarde|.exe">Continuer<small>Bois-de-l'Aube · jour 12</small></button>
+      <button class="btn principal" data-si="Première fois">Nouveau monde</button>
+      <button class="btn" data-si="Avec sauvegarde|.exe">Nouveau monde</button>
+      <button class="btn">Charger un monde</button>
+      <button class="btn">Réglages</button>
+      <button class="btn discret" data-si=".exe">Quitter</button>
+      <p data-si="Première fois" style="font-size:13px;color:var(--encre-2);margin-top:18px">
+        Tes mondes sont enregistrés dans ce navigateur. Pense à les exporter de temps en temps (menu Pause).</p>
+    </div>
+    <div style="position:absolute;right:16px;bottom:10px;font-size:12px;color:#ccc8" data-si="Avec sauvegarde|Première fois">v0.1 · navigateur</div>
+    <div style="position:absolute;right:16px;bottom:10px;font-size:12px;color:#ccc8" data-si=".exe">v0.1 · ordinateur</div>
+  </section>
+
+  <!-- NOUVEAU MONDE -->
+  <section data-ecran="nouveau" data-nom="Nouveau monde" data-etats="Simple|Options avancées">
+    <div class="scene"></div><div class="voile"></div>
+    <div class="panneau centre" style="width:440px;padding:22px 24px">
+      <h2 class="titre-jeu" style="margin:0 0 6px;font-size:26px">Nouveau monde</h2>
+      <label for="nom">Nom du monde</label>
+      <input id="nom" class="champ" value="Les Terres de Braise" maxlength="32">
+      <div data-si="Options avancées">
+        <label for="graine">Graine <span style="color:#999">(laisse vide pour un monde au hasard)</span></label>
+        <input id="graine" class="champ" placeholder="ex. 482913">
+        <p style="font-size:13px;color:var(--encre-2);margin:6px 0 0">La même graine donne toujours le même monde : partage-la pour qu'un ami explore le même.</p>
+      </div>
+      <button class="lien" data-si="Simple" style="margin-top:8px;padding-left:0">▸ Options avancées</button>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn discret centre-txt">Retour</button>
+        <button class="btn principal centre-txt">Créer le monde</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHARGER -->
+  <section data-ecran="charger" data-nom="Charger" data-etats="Liste|Vide|Sauvegarde illisible|Mise à jour|Supprimer ?|Import refusé|.exe">
+    <div class="scene"></div><div class="voile"></div>
+    <div class="panneau centre" style="width:620px;padding:20px 22px;max-height:90%;overflow:auto">
+      <div style="display:flex;align-items:center">
+        <h2 class="titre-jeu" style="margin:0;font-size:26px">Mes mondes</h2>
+        <button class="lien" style="margin-left:auto">⇪ Importer un fichier</button>
+      </div>
+      <div data-si="Import refusé" class="msg erreur">Import refusé : ce fichier n'est pas une sauvegarde du jeu, ou il est abîmé.</div>
+      <div data-si="Liste|Sauvegarde illisible|Supprimer ?|Import refusé|.exe">
+        <div class="monde"><div><h4>Bois-de-l'Aube</h4><p>Jour 12 · 4 h 20 jouées · il y a 2 heures</p></div>
+          <div class="actions"><button class="mini-btn">Jouer</button><button class="lien">Exporter</button><button class="lien danger">Supprimer</button></div></div>
+        <div class="monde"><div><h4>Les Terres de Braise</h4><p>Jour 3 · 48 min jouées · hier</p></div>
+          <div class="actions"><button class="mini-btn">Jouer</button><button class="lien">Exporter</button><button class="lien danger">Supprimer</button></div></div>
+      </div>
+      <div data-si="Sauvegarde illisible">
+        <div class="monde illisible"><div><h4>Vieux Monde</h4><p>Sauvegarde illisible ou créée par une version plus récente du jeu.</p></div>
+          <div class="actions"><button class="mini-btn" disabled>Jouer</button><button class="lien">Exporter quand même</button><button class="lien danger">Supprimer</button></div></div>
+      </div>
+      <div data-si="Vide" style="text-align:center;padding:30px 10px">
+        <p style="font-size:17px;margin:0 0 6px">Aucun monde pour l'instant.</p>
+        <p style="color:var(--encre-2);margin:0 0 16px">Crée ton premier monde, ou importe une sauvegarde exportée.</p>
+        <button class="btn principal centre-txt" style="width:auto;display:inline-block">Créer un monde</button>
+      </div>
+      <div data-si="Mise à jour" class="msg info">Mise à jour de « Bois-de-l'Aube » pour la nouvelle version du jeu… Une copie de l'ancienne sauvegarde est gardée.</div>
+      <div data-si="Supprimer ?" class="msg erreur">
+        Supprimer « Bois-de-l'Aube » ? 12 jours de survie seront perdus définitivement.
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="mini-btn" style="background:var(--ko);border-color:var(--ko)">Supprimer</button><button class="lien">Annuler</button></div>
+      </div>
+      <div class="msg info" data-si="Liste|Vide|Sauvegarde illisible|Mise à jour|Supprimer ?|Import refusé">Ces mondes sont enregistrés dans ce navigateur, séparément de la version ordinateur. Exporte-les pour les garder en sécurité.</div>
+      <div class="msg info" data-si=".exe">Ces mondes sont enregistrés sur cet ordinateur, séparément de la version navigateur. L'export / import fait le pont entre les deux.</div>
+      <button class="btn discret centre-txt">Retour</button>
+    </div>
+  </section>
+
+  <!-- CHARGEMENT DU MONDE -->
+  <section data-ecran="chargement" data-nom="Chargement" data-etats="En cours|Erreur">
+    <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 60%, #2a1d10, #0b0910 70%)"></div>
+    <div class="centre" style="width:480px;text-align:center">
+      <h2 class="titre-jeu" style="font-size:28px;margin:0">Les Terres de Braise</h2>
+      <div data-si="En cours">
+        <div class="progression"><i style="width:68%"></i></div>
+        <p style="margin:0;color:var(--encre-2);font-size:14px">Génération du terrain autour de toi…</p>
+        <p style="margin-top:34px;font-size:15px;color:#ffe2a8">Astuce : la nuit est froide. Ton Foyer te réchauffe — rentre avant le crépuscule.</p>
+      </div>
+      <div data-si="Erreur">
+        <div class="msg erreur" style="text-align:left">Le monde n'a pas pu être chargé. Ta sauvegarde n'a pas été modifiée.</div>
+        <button class="btn principal centre-txt">Réessayer</button><button class="btn discret centre-txt">Retour au menu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- EN JEU — JOUR -->
+  <section data-ecran="hud-jour" data-nom="En jeu — jour" data-etats="Début de partie|Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Crépuscule|Après réapparition|Sac plein">
+    <div class="scene" data-classe-si="Crépuscule:crepuscule|Biome froid sans cape:froid"><div class="brume"></div>
+      <div class="arbre" style="left:8%;bottom:20%;transform:scale(1.4)"></div><div class="arbre" style="left:24%;bottom:26%"></div>
+      <div class="arbre" style="left:62%;bottom:30%;transform:scale(1.6)"></div><div class="arbre" style="left:77%;bottom:22%;transform:scale(1.1)"></div>
+      <div class="tombe" data-si="Après réapparition" style="left:66%;bottom:34%;transform:scale(.6)"></div>
+      <div class="perso"></div></div>
+
+    <div class="boussole">
+      <div class="graduations"></div>
+      <span class="cap petit" style="left:8%">SO</span><span class="cap" style="left:25%">O</span><span class="cap petit" style="left:41%">NO</span>
+      <span class="cap nord" style="left:58%">N</span><span class="cap petit" style="left:75%">NE</span><span class="cap" style="left:92%">E</span>
+      <span class="marque" style="left:30%"><i class="ic ic-foyer"></i><small data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Sac plein">120 m</small><small data-si="Crépuscule|Biome froid sans cape">640 m</small><small data-si="Après réapparition">40 m</small></span>
+      <span class="marque" style="left:70%" data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Crépuscule|Sac plein|Biome froid sans cape"><i class="ic ic-pierre"></i><small>340 m</small></span>
+      <span class="marque" style="left:68%" data-si="Après réapparition"><i class="ic ic-tombe"></i><small>J4 · 140 m</small></span>
+      <span class="direction-assaut" style="left:58%" data-si="Crépuscule">▼ assaut cette nuit : du nord</span>
+    </div>
+
+    <div class="mm-wrap"><div class="astre" style="--t:80deg" data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Après réapparition|Sac plein"></div>
+      <div class="astre" style="--t:205deg" data-si="Crépuscule"></div>
+      <div class="minimap"><div class="brouillard"></div>
+        <span class="pt" style="left:30%;top:44%"><i class="ic ic-foyer"></i></span>
+        <span class="pt" style="left:60%;top:22%" data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Crépuscule|Sac plein|Biome froid sans cape"><i class="ic ic-pierre"></i></span>
+        <span class="pt" style="left:58%;top:24%" data-si="Après réapparition"><i class="ic ic-tombe"></i></span>
+        <div class="joueur" style="--cap:-20deg"></div><span class="nord">N</span></div></div>
+    <div class="heure"><span data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Après réapparition|Sac plein">Jour 3 · matin</span>
+      <span data-si="Crépuscule" style="color:#ffc58a;font-weight:600">Crépuscule · nuit dans 2 min</span>
+      <span class="assaut" data-si="Crépuscule">Assaut cette nuit !</span>
+      <span class="assaut" data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Après réapparition|Sac plein">Assaut dans 2 nuits</span></div>
+
+    <div class="panneau objectifs" data-si="Début de partie">
+      <h4>Premiers pas</h4>
+      <ul><li class="fait">Couper du bois — <span class="touche">E</span> face à un arbre</li><li>▸ Fabriquer une hachette — <span class="touche">Tab</span></li>
+        <li class="plus-tard">Allumer un feu de camp</li><li class="plus-tard">Survivre à la nuit</li></ul>
+    </div>
+    <div class="panneau objectifs" data-si="Après réapparition" style="border-color:#a87a22">
+      <h4>Après ta chute</h4><ul><li>▸ Récupère ton sac sur ta tombe (<i class="ic ic-tombe"></i> 140 m)</li></ul>
+    </div>
+
+    <div class="indice" data-si="Début de partie">Survis. La nuit tombe dans 14 minutes.</div>
+    <div class="commandes" data-si="Début de partie">
+      <span><span class="touche">Z</span><span class="touche">Q</span><span class="touche">S</span><span class="touche">D</span> se déplacer</span>
+      <span><span class="touche">E</span> interagir</span><span><span class="touche">Tab</span> sac</span><span><span class="touche">M</span> carte</span><span><span class="touche">Échap</span> pause</span>
+    </div>
+    <div class="indice" data-si="Faim critique">Tu as faim. Sélectionne de la nourriture et fais clic droit pour manger.</div>
+    <div class="indice" data-si="Biome froid sans cape" style="border-color:#3f78a5;color:#cfe8ff">Il fait froid ici, même en plein jour. Une cape chaude te protégerait.</div>
+    <div class="indice alerte" data-si="Crépuscule">Le soleil baisse. Rentre à ton Foyer (640 m) avant la nuit.</div>
+    <div class="indice" data-si="Après réapparition">Tu es revenu à ta couchette. Faim et chaleur à 50 %.</div>
+
+    <div class="reticule"></div>
+    <div class="invite" data-si="Récolte"><span class="touche">E</span> Récolter — Chêne <span class="coups"><i></i></span></div>
+    <div class="gain" data-si="Récolte">+2 🪵<small>Bois : 16</small></div>
+    <div class="invite" data-si="Sac plein" style="border:1px solid #a33"><span class="touche">E</span> Récolter — Chêne · <span style="color:#ff9d9d">Sac plein</span></div>
+    <div class="toast" data-si="Fabrication réussie">Hachette fabriquée → rangée en case 1</div>
+
+    <div class="hud-jauges">
+      <div class="jauge vie"><div class="ico" title="Vie">❤</div><div class="barre"><i data-w="0.82;Après réapparition=0.6"></i></div></div>
+      <div class="jauge faim" data-classe-si="Faim critique:critique"><div class="ico" title="Faim">🍖</div><div class="barre jauge-wrap"><i data-w="0.64;Faim critique=0.12;Après réapparition=0.5"></i><span class="tendance" data-si="Faim critique">▼</span></div></div>
+      <div class="jauge chaleur" data-classe-si="Biome froid sans cape:froid|Biome froid sans cape:critique"><div class="ico" title="Chaleur">🌡</div><div class="barre jauge-wrap"><i data-w="0.9;Biome froid sans cape=0.28;Crépuscule=0.7;Après réapparition=0.5"></i><span class="tendance" data-si="Biome froid sans cape|Crépuscule">▼</span></div></div>
+    </div>
+    <div class="barre-rapide">
+      <div class="case choisie" data-classe-si="Après réapparition:vide-sac"><b>1</b><span data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Crépuscule|Sac plein">🪓</span></div>
+      <div class="case"><b>2</b><span data-si="Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Crépuscule|Sac plein">⛏</span></div>
+      <div class="case"><b>3</b><span data-si="Récolte|Faim critique|Biome froid sans cape|Crépuscule|Sac plein">🗡</span></div>
+      <div class="case" data-classe-si="Faim critique:choisie"><b>4</b><span data-si="Début de partie|Récolte|Fabrication réussie|Faim critique|Biome froid sans cape|Crépuscule|Sac plein">🍓<em>6</em></span></div>
+      <div class="case"><b>5</b><span data-si="Récolte|Faim critique|Biome froid sans cape|Crépuscule|Sac plein">🥩<em>2</em></span></div>
+      <div class="case"><b>6</b></div><div class="case"><b>7</b></div><div class="case"><b>8</b></div>
+    </div>
+  </section>
+
+  <!-- EN JEU — NUIT -->
+  <section data-ecran="hud-nuit" data-nom="En jeu — nuit" data-etats="Près du Foyer|Loin du Foyer (froid)|Attaque hors champ|Combat|Réparer|Nuit d'assaut|Échec de sauvegarde">
+    <div class="scene nuit"><div class="brume"></div>
+      <div class="arbre" style="left:10%;bottom:20%;transform:scale(1.4)"></div><div class="arbre" style="left:70%;bottom:26%;transform:scale(1.5)"></div>
+      <div class="lueur-feu" data-si="Près du Foyer|Attaque hors champ|Combat|Réparer|Nuit d'assaut|Échec de sauvegarde"></div><div class="feu" data-si="Près du Foyer|Attaque hors champ|Combat|Réparer|Nuit d'assaut|Échec de sauvegarde"></div>
+      <div class="palissade" data-si="Réparer|Nuit d'assaut"></div>
+      <div class="monstre" data-si="Nuit d'assaut" style="left:18%;bottom:24%"></div>
+      <div class="monstre" data-si="Nuit d'assaut" style="left:78%;bottom:20%"></div>
+      <div class="monstre" data-si="Nuit d'assaut" style="left:66%;bottom:34%;transform:scale(.7)"></div>
+      <div class="monstre" data-si="Combat" style="left:28%;bottom:22%;transform:scale(1.2)"></div>
+      <div class="perso"></div></div>
+
+    <div class="boussole">
+      <div class="graduations"></div>
+      <span class="cap nord" style="left:10%">N</span><span class="cap petit" style="left:27%">NE</span><span class="cap" style="left:44%">E</span>
+      <span class="cap petit" style="left:61%">SE</span><span class="cap" style="left:78%">S</span><span class="cap petit" style="left:95%">SO</span>
+      <span class="marque" style="left:30%" data-si="Loin du Foyer (froid)"><i class="ic ic-foyer"></i><small>210 m</small></span>
+      <span class="direction-assaut" style="left:10%" data-si="Nuit d'assaut">▼ ils viennent du nord</span>
+    </div>
+    <div class="mm-wrap"><div class="astre lune" style="--t:290deg"></div>
+      <div class="minimap nuit"><div class="brouillard"></div>
+        <span class="pt" data-si="Près du Foyer|Attaque hors champ|Combat|Réparer|Nuit d'assaut|Échec de sauvegarde" style="left:50%;top:58%"><i class="ic ic-foyer"></i></span>
+        <span class="pt" data-si="Loin du Foyer (froid)" style="left:72%;top:40%"><i class="ic ic-foyer"></i></span>
+        <span class="ennemi" data-si="Attaque hors champ" style="left:56%;top:34%"></span>
+        <span class="ennemi" data-si="Combat" style="left:40%;top:46%"></span>
+        <span class="ennemi" data-si="Nuit d'assaut" style="left:40%;top:30%"></span>
+        <span class="ennemi" data-si="Nuit d'assaut" style="left:60%;top:28%"></span>
+        <span class="ennemi" data-si="Nuit d'assaut" style="left:50%;top:22%"></span>
+        <div class="joueur" style="--cap:105deg"></div><span class="nord">N</span></div></div>
+    <div class="heure">Jour 4 · nuit — aube dans 5 min
+      <span class="assaut" data-si="Près du Foyer|Loin du Foyer (froid)|Attaque hors champ|Combat|Réparer|Échec de sauvegarde">Assaut dans 1 nuit</span>
+      <span class="assaut" data-si="Nuit d'assaut">NUIT D'ASSAUT</span></div>
+
+    <div class="indice" data-si="Loin du Foyer (froid)">Le froid monte. Ton Foyer est à 210 m.</div>
+    <div class="indice alerte" data-si="Nuit d'assaut">Ils viennent pour ton Foyer. Tiens jusqu'à l'aube.</div>
+    <div data-si="Attaque hors champ"><div class="degat-dir"></div><div class="alerte-attaque">◀ Attaque !</div></div>
+    <div data-si="Combat"><div class="vie-cible">Rôdeur nocturne<div class="b"><i></i></div></div><div class="touche-coup">✶ −12</div></div>
+    <div data-si="Réparer"><div class="etat-construction">Palissade — 35 %<div class="b"><i></i></div><span class="touche">E</span> Réparer — Bois 3</div></div>
+    <div class="endurance-arc" data-si="Attaque hors champ|Combat|Nuit d'assaut"></div>
+    <div class="reticule"></div>
+    <div class="toast erreur" data-si="Échec de sauvegarde">La sauvegarde a échoué (stockage plein). Exporte ton monde depuis la Pause.</div>
+    <div class="sauvegarde" data-si="Près du Foyer">Sauvegarde…</div>
+
+    <div class="hud-jauges">
+      <div class="jauge vie" data-classe-si="Attaque hors champ:critique"><div class="ico">❤</div><div class="barre jauge-wrap"><i data-w="0.74;Attaque hors champ=0.24;Combat=0.55"></i><span class="tendance" data-si="Attaque hors champ">▼</span></div></div>
+      <div class="jauge faim"><div class="ico">🍖</div><div class="barre"><i data-w="0.52"></i></div></div>
+      <div class="jauge chaleur" data-classe-si="Loin du Foyer (froid):froid|Loin du Foyer (froid):critique"><div class="ico">🌡</div><div class="barre jauge-wrap"><i data-w="0.88;Loin du Foyer (froid)=0.18"></i><span class="tendance" data-si="Loin du Foyer (froid)">▼</span><span class="tendance" data-si="Près du Foyer" style="color:#9fe39f">▲</span></div></div>
+    </div>
+    <div class="barre-rapide">
+      <div class="case"><b>1</b>🪓</div><div class="case"><b>2</b>⛏</div><div class="case choisie"><b>3</b>🗡</div>
+      <div class="case"><b>4</b>🍓<em>2</em></div><div class="case"><b>5</b>🕯<em>3</em></div><div class="case"><b>6</b></div><div class="case"><b>7</b></div><div class="case"><b>8</b></div>
+    </div>
+  </section>
+
+  <!-- INVENTAIRE / FABRIQUER / CONSTRUIRE / CARNET -->
+  <section data-ecran="inventaire" data-nom="Sac (Tab)" data-etats="Sac|Nourriture choisie|Sac plein|Fabriquer|Fabriquer (début)|Construire|Carnet">
+    <div class="scene"></div><div class="voile" style="background:rgba(5,4,10,.4)"></div>
+    <div class="panneau fenetre">
+      <div class="onglets">
+        <button data-onglet="Sac|Nourriture choisie|Sac plein">Sac<kbd>1</kbd></button><button data-onglet="Fabriquer|Fabriquer (début)">Fabriquer<kbd>2</kbd></button>
+        <button data-onglet="Construire">Construire<kbd>3</kbd></button><button data-onglet="Carnet">Carnet<kbd>4</kbd></button>
+        <span class="fermer"><span class="touche">Tab</span> fermer · le jeu continue</span>
+      </div>
+      <div class="corps" data-si="Sac|Nourriture choisie|Sac plein">
+        <div>
+          <div class="grille">
+            <div class="case" data-classe-si="Sac:choisie|Sac plein:choisie">🪵<em>14</em></div><div class="case">🪨<em>9</em></div><div class="case">🌿<em>6</em></div>
+            <div class="case" data-classe-si="Nourriture choisie:choisie">🍓<em>6</em></div><div class="case">🥩<em>2</em></div><div class="case">💎<em>1</em></div>
+            <div class="case">🪓</div><div class="case">⛏</div><div class="case">🗡</div><div class="case">🧥</div><div class="case">🕯<em>3</em></div><div class="case"></div>
+            <div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div>
+            <div class="case plein-x"></div><div class="case plein-x"></div><div class="case plein-x"></div><div class="case plein-x"></div><div class="case plein-x"></div><div class="case plein-x"></div>
+          </div>
+          <p style="font-size:13px;color:var(--encre-2);margin-top:8px"><span data-si="Sac|Nourriture choisie">11 / 24 emplacements</span><span data-si="Sac plein">24 / 24 emplacements</span> · clic pour choisir, puis <span class="touche">1</span>–<span class="touche">8</span> pour ranger dans la barre rapide</p>
+          <div class="msg erreur" data-si="Sac plein">Sac plein : tu ne peux plus rien ramasser. Pose un coffre ou jette des objets.</div>
+        </div>
+        <div class="detail" data-si="Sac|Sac plein">
+          <h3>Bois</h3>
+          <p style="margin:0 0 8px;color:var(--encre-2);font-size:14px">Ressource · récoltée sur les arbres (plus vite avec la hachette).</p>
+          <p style="font-size:14px;margin:0">Sert à : hachette, feu de camp, abri, palissade, torche, coffre.</p>
+          <div style="display:flex;gap:8px;margin-top:14px"><button class="lien danger" style="padding-left:0">Jeter</button></div>
+        </div>
+        <div class="detail" data-si="Nourriture choisie">
+          <h3>Baies sauvages</h3>
+          <p style="margin:0 0 8px;color:var(--encre-2);font-size:14px">Nourriture · cueillie sur les buissons de la forêt.</p>
+          <p style="font-size:14px;margin:0">🍖 Faim +10</p>
+          <div style="display:flex;gap:8px;margin-top:14px"><button class="mini-btn">Manger</button><button class="lien danger">Jeter</button></div>
+          <p style="font-size:13px;color:var(--encre-2);margin-top:12px">En jeu : choisis-la dans la barre rapide, puis <span class="touche">clic droit</span>.</p>
+        </div>
+      </div>
+      <div class="corps" data-si="Fabriquer" style="grid-template-columns:1fr">
+        <div class="recettes">
+          <div class="recette"><div class="case">🪓</div><div><b>Hachette</b><div class="ingr"><span class="ok">Bois 3/3</span> · <span class="ok">Pierre 2/2</span></div></div><div><button class="mini-btn">Fabriquer</button></div></div>
+          <div class="recette"><div class="case">⛏</div><div><b>Pioche</b><div class="ingr"><span class="ok">Bois 3/3</span> · <span class="ok">Pierre 4/4</span></div></div><div><button class="mini-btn">Fabriquer</button></div></div>
+          <div class="recette impossible"><div class="case">🧥</div><div><b>Cape chaude</b> <span style="font-size:12px;color:var(--froid)">protège du froid</span><div class="ingr"><span class="manque">Peau 0/3</span> · <span class="ok">Fibre 6/4</span></div></div><div><button class="mini-btn" disabled>Fabriquer</button></div></div>
+          <div class="recette impossible"><div class="case">🗡</div><div><b>Lance d'os</b><div class="ingr"><span class="ok">Bois 2/2</span> · <span class="manque">Os 0/2</span></div></div><div><button class="mini-btn" disabled>Fabriquer</button></div></div>
+          <p style="font-size:13px;color:var(--encre-2)">Une recette apparaît dès que tu as ramassé un de ses ingrédients.</p>
+        </div>
+      </div>
+      <div class="corps" data-si="Fabriquer (début)" style="grid-template-columns:1fr;place-items:center">
+        <div style="text-align:center;color:var(--encre-2)"><p style="font-size:17px;color:var(--encre)">Aucune recette pour l'instant.</p>
+          <p>Ramasse du bois ou de la pierre : les recettes apparaissent dès que tu as un de leurs ingrédients.</p></div>
+      </div>
+      <div class="corps" data-si="Construire" style="grid-template-columns:1fr">
+        <div class="recettes">
+          <div class="recette"><div class="case">🔥</div><div><b>Feu de camp</b> <span style="font-size:12px;color:var(--encre-2)">chaleur et lumière · ton premier feu devient ton Foyer</span><div class="ingr"><span class="ok">Bois 5/5</span> · <span class="ok">Pierre 3/3</span></div></div><div><button class="mini-btn">Poser</button></div></div>
+          <div class="recette"><div class="case">🕯</div><div><b>Torche</b> <span style="font-size:12px;color:var(--encre-2)">éclaire autour d'elle</span><div class="ingr"><span class="ok">Bois 1/1</span> · <span class="ok">Fibre 1/1</span></div></div><div><button class="mini-btn">Poser</button></div></div>
+          <div class="recette"><div class="case">🛏</div><div><b>Couchette</b> <span style="font-size:12px;color:var(--encre-2)">tu réapparais ici</span><div class="ingr"><span class="ok">Bois 6/6</span> · <span class="ok">Fibre 4/4</span></div></div><div><button class="mini-btn">Poser</button></div></div>
+          <div class="recette"><div class="case">⛺</div><div><b>Abri</b> <span style="font-size:12px;color:var(--encre-2)">garde la chaleur</span><div class="ingr"><span class="ok">Bois 10/8</span> · <span class="ok">Fibre 6/6</span></div></div><div><button class="mini-btn">Poser</button></div></div>
+          <div class="recette impossible"><div class="case">🧱</div><div><b>Palissade</b> <span style="font-size:12px;color:var(--encre-2)">bloque les créatures, peut être abîmée</span><div class="ingr"><span class="manque">Bois 14/20</span></div></div><div><button class="mini-btn" disabled>Poser</button></div></div>
+          <div class="recette impossible"><div class="case">📦</div><div><b>Coffre</b><div class="ingr"><span class="ok">Bois 8/8</span> · <span class="manque">Pierre 2/4</span></div></div><div><button class="mini-btn" disabled>Poser</button></div></div>
+          <div class="recette impossible"><div class="case">🔥</div><div><b>Foyer de pierre</b> <span style="font-size:12px;color:var(--or)">amélioration de ton Foyer · chaleur plus loin</span><div class="ingr"><span class="ok">Pierre 9/8</span> · <span class="manque">Givrite 1/3</span> <span style="font-size:12px">(biome froid)</span></div></div><div><button class="mini-btn" disabled>Améliorer</button></div></div>
+        </div>
+      </div>
+      <div data-si="Carnet" style="overflow:auto">
+        <div class="carnet">
+          <div class="bloc"><h4>Survie</h4><ul><li>Jours survécus : <b>12</b></li><li>Record : <b>12</b></li><li>Nuits d'assaut tenues : <b>2</b></li></ul></div>
+          <div class="bloc"><h4>Biomes — 2 / 2</h4><ul><li>✓ Forêt tempérée</li><li>✓ Biome froid</li></ul></div>
+          <div class="bloc"><h4>Créatures — 2 / 3</h4><ul><li>✓ Animal paisible</li><li>✓ Rôdeur nocturne</li><li class="inconnu">? Pas encore rencontrée</li></ul></div>
+          <div class="bloc"><h4>Lieux découverts — 6</h4><ul><li><i class="ic ic-pierre"></i> Pierres-veilleuses : 3 (2 activées)</li><li><i class="ic ic-ruine"></i> Ruines : 3 (2 fouillées)</li></ul></div>
+        </div>
+      </div>
+      <div class="pied"><span class="touche">1</span>–<span class="touche">4</span> changer d'onglet · <span class="touche">Échap</span> pause</div>
+    </div>
+  </section>
+
+  <!-- COFFRE / TOMBE -->
+  <section data-ecran="coffre" data-nom="Coffre / tombe" data-etats="Coffre|Ruine déjà fouillée|Tombe|Tombe, sac plein">
+    <div class="scene nuit" data-classe-si="Coffre:x"><div class="coffre-3d" data-si="Coffre|Ruine déjà fouillée"></div><div class="tombe" data-si="Tombe|Tombe, sac plein"></div><div class="perso"></div></div>
+    <div class="voile" style="background:rgba(5,4,10,.4)"></div>
+    <div class="panneau fenetre" style="height:72%">
+      <div class="onglets" style="padding-bottom:8px">
+        <span style="font-size:17px;color:var(--or)" data-si="Coffre">Ton coffre</span>
+        <span style="font-size:17px;color:var(--or)" data-si="Ruine déjà fouillée">Coffre de ruine</span>
+        <span style="font-size:17px;color:var(--or)" data-si="Tombe|Tombe, sac plein"><i class="ic ic-tombe"></i> Ta tombe — jour 4</span>
+        <span class="fermer"><span class="touche">E</span> fermer · le jeu continue</span>
+      </div>
+      <div class="deux-grilles" data-si="Coffre">
+        <div><h4>Sac — 11 / 24</h4><div class="grille"><div class="case">🪵<em>14</em></div><div class="case">🪨<em>9</em></div><div class="case">🌿<em>6</em></div><div class="case">🍓<em>6</em></div><div class="case">🪓</div><div class="case">⛏</div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div></div></div>
+        <div class="fleches"><button class="mini-btn">Tout ranger →</button><button class="mini-btn">← Tout prendre</button></div>
+        <div><h4>Coffre — 4 / 18</h4><div class="grille"><div class="case">🪵<em>40</em></div><div class="case">🪨<em>22</em></div><div class="case">🥩<em>5</em></div><div class="case">💎<em>2</em></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div><div class="case"></div></div></div>
+      </div>
+      <div data-si="Ruine déjà fouillée" style="display:grid;place-items:center;padding:40px;color:var(--encre-2)">
+        <p style="font-size:17px;color:var(--encre);margin:0">Ce coffre est vide.</p><p>Tu l'as déjà fouillé. Les ruines ne se remplissent pas à nouveau.</p></div>
+      <div class="deux-grilles" data-si="Tombe|Tombe, sac plein">
+        <div><h4>Sac — <span data-si="Tombe">2 / 24</span><span data-si="Tombe, sac plein">24 / 24</span></h4><div class="grille"><div class="case">🪵<em>3</em></div><div class="case">🍓<em>2</em></div><div class="case plein-x"></div><div class="case plein-x"></div><div class="case plein-x"></div><div class="case plein-x"></div></div></div>
+        <div class="fleches"><button class="mini-btn">← Tout récupérer</button></div>
+        <div><h4>Contenu de la tombe — <span data-si="Tombe">14 objets</span><span data-si="Tombe, sac plein">6 objets restants</span></h4><div class="grille"><div class="case">🪓</div><div class="case">⛏</div><div class="case">🗡</div><div class="case">🧥</div><div class="case">🪨<em>9</em></div><div class="case">💎<em>1</em></div></div>
+          <div class="msg erreur" data-si="Tombe, sac plein">Sac plein : 6 objets restent dans la tombe. Elle reste en place tant qu'elle n'est pas vide.</div></div>
+      </div>
+      <div class="pied">clic pour déplacer un objet · <span class="touche">Maj</span>+clic : déplacer toute la pile</div>
+    </div>
+  </section>
+
+  <!-- CARTE EN GRAND -->
+  <section data-ecran="carte" data-nom="Carte (M)" data-etats="Exploration|Après une mort|Avec épingle|Attaqué, carte ouverte">
+    <div class="scene"><div class="perso"></div></div><div class="voile" style="background:rgba(5,4,10,.4)"></div>
+    <div class="carte" data-classe-si="Attaqué, carte ouverte:attaque">
+      <span class="biome" style="left:14%;top:74%">Forêt tempérée</span>
+      <span class="biome" style="left:60%;top:10%">Biome froid</span>
+      <span class="pt" style="left:40%;top:60%"><i class="ic ic-foyer"></i></span><span class="lieu" style="left:40%;top:62%">Ton Foyer</span>
+      <span class="pt" style="left:58%;top:42%"><i class="ic ic-pierre"></i></span><span class="lieu" style="left:58%;top:44%">Pierre-veilleuse</span>
+      <span class="pt" style="left:30%;top:44%"><i class="ic ic-ruine"></i></span><span class="lieu" style="left:30%;top:46%">Ruine (fouillée)</span>
+      <span class="pt" style="left:74%;top:26%"><i class="ic ic-pierre eteinte"></i></span><span class="lieu" style="left:74%;top:28%;color:#ccc">Pierre non activée</span>
+      <span class="pt" data-si="Après une mort" style="left:52%;top:72%"><i class="ic ic-tombe"></i></span>
+      <span class="lieu" data-si="Après une mort" style="left:52%;top:74%;color:#ffd2a8">Ta tombe — jour 4</span>
+      <span class="pt" data-si="Avec épingle" style="left:80%;top:18%"><i class="ic ic-epingle"></i></span>
+      <span class="lieu" data-si="Avec épingle" style="left:80%;top:20%;color:#ffe2a8">Ton épingle</span>
+      <span class="ennemi" data-si="Attaqué, carte ouverte" style="left:42%;top:52%"></span>
+      <div class="joueur" style="left:44%;top:56%"></div>
+      <div class="brouillard"></div>
+      <div class="zoom-btns"><button>1</button><button class="actif">2</button><button>3</button><button title="Recentrer sur toi">◎</button></div>
+      <div class="echelle"><i></i>100 m</div>
+    </div>
+    <div class="panneau carte-cote">
+      <h3>Carte</h3>
+      <p style="margin:0 0 4px">Jour 3 · après-midi</p>
+      <p style="margin:0;color:var(--encre-2)">Ton Foyer : 120 m · nuit dans 6 min</p>
+      <div class="sep"></div>
+      <ul>
+        <li><span class="fleche-legende"></span> Toi</li>
+        <li><i class="ic ic-foyer"></i> Ton Foyer</li>
+        <li><i class="ic ic-pierre"></i> Pierre-veilleuse activée</li>
+        <li><i class="ic ic-pierre eteinte"></i> Pierre non activée</li>
+        <li><i class="ic ic-ruine"></i> Ruine</li>
+        <li data-si="Après une mort"><i class="ic ic-tombe"></i> Ta tombe</li>
+        <li data-si="Avec épingle"><i class="ic ic-epingle"></i> Ton épingle</li>
+      </ul>
+      <div class="sep"></div>
+      <p style="font-size:13px;margin:0 0 6px">Carnet : biomes 2/2 · créatures 2/3 · lieux 6</p>
+      <p style="font-size:13px;color:var(--encre-2);margin:0 0 6px" data-si="Avec épingle">Clic droit sur la carte : poser ou retirer ton épingle (une seule).</p>
+      <p style="font-size:13px;color:var(--encre-2);margin:0">Le jeu continue : ton perso s'arrête pendant que tu regardes la carte.</p>
+    </div>
+    <div style="position:absolute;left:20%;bottom:16px;font-size:13px;color:var(--encre-2)"><span class="touche">M</span> fermer · <span class="touche">Échap</span> pause · molette : zoom · glisser : déplacer</div>
+    <div class="hud-jauges">
+      <div class="jauge vie" data-classe-si="Attaqué, carte ouverte:critique"><div class="ico">❤</div><div class="barre"><i data-w="0.82;Attaqué, carte ouverte=0.3"></i></div></div>
+      <div class="jauge faim"><div class="ico">🍖</div><div class="barre"><i data-w="0.6"></i></div></div>
+      <div class="jauge chaleur"><div class="ico">🌡</div><div class="barre"><i data-w="0.85"></i></div></div>
+    </div>
+    <div data-si="Attaqué, carte ouverte"><div class="degat-dir" style="transform:rotate(160deg)"></div></div>
+  </section>
+
+  <!-- POSE D'OBJET -->
+  <section data-ecran="pose" data-nom="Poser un objet" data-etats="Valide|Trop pentu|Bloqué">
+    <div class="scene"><div class="brume"></div><div class="arbre" style="left:30%;bottom:24%;transform:scale(1.3)"></div><div class="arbre" style="left:80%;bottom:22%"></div><div class="perso"></div>
+      <div class="fantome valide" data-si="Valide">✓</div><div class="fantome invalide" data-si="Trop pentu|Bloqué">✗</div></div>
+    <div class="panneau pose-info">
+      <h4>Abri</h4>
+      <div>Coût : Bois 8 · Fibre 6</div>
+      <div data-si="Valide" style="color:#8fd3ff;margin-top:6px">✓ Emplacement valide</div>
+      <div data-si="Trop pentu" class="raison" style="margin-top:6px">Terrain trop en pente</div>
+      <div data-si="Bloqué" class="raison" style="margin-top:6px">Un arbre bloque l'emplacement</div>
+    </div>
+    <div class="aide-touches"><span><span class="touche">Clic</span> poser</span><span><span class="touche">R</span> tourner</span><span><span class="touche">Clic droit</span> annuler</span><span><span class="touche">Échap</span> pause</span></div>
+    <div class="hud-jauges">
+      <div class="jauge vie"><div class="ico">❤</div><div class="barre"><i data-w="0.82"></i></div></div>
+      <div class="jauge faim"><div class="ico">🍖</div><div class="barre"><i data-w="0.64"></i></div></div>
+      <div class="jauge chaleur"><div class="ico">🌡</div><div class="barre"><i data-w="0.9"></i></div></div>
+    </div>
+    <div class="heure" style="top:16px">Jour 3 · après-midi</div>
+  </section>
+
+  <!-- PAUSE -->
+  <section data-ecran="pause" data-nom="Pause" data-etats="Pause|Sauvegardé|Clique pour reprendre|Navigation privée">
+    <div class="scene"><div class="perso"></div></div><div class="voile"></div>
+    <div class="panneau centre" style="width:340px;padding:20px 22px" data-si="Pause|Sauvegardé|Navigation privée">
+      <h2 class="titre-jeu" style="margin:0 0 10px;font-size:26px">Pause</h2>
+      <div class="msg erreur" data-si="Navigation privée" style="font-size:13px">Navigation privée : ton monde sera effacé à la fermeture du navigateur. Exporte-le pour le garder.</div>
+      <button class="btn principal">Reprendre</button>
+      <button class="btn">Sauvegarder<small data-si="Pause|Navigation privée">auto il y a 2 min</small><small data-si="Sauvegardé" style="color:#9fe39f">✓ sauvegardé</small></button>
+      <button class="btn">Exporter le monde</button>
+      <button class="btn">Réglages</button>
+      <button class="btn">Retour au titre<small>sauvegarde d'abord</small></button>
+      <p style="font-size:13px;color:var(--encre-2);margin:8px 0 0">En pause, le jeu est vraiment arrêté.</p>
+    </div>
+    <div class="centre" data-si="Clique pour reprendre" style="text-align:center">
+      <div class="panneau" style="padding:22px 30px"><p style="font-size:20px;margin:0">Clique pour reprendre</p>
+      <p style="margin:6px 0 0;color:var(--encre-2);font-size:13px">Le jeu a besoin de ta souris pour la caméra.</p></div>
+    </div>
+  </section>
+
+  <!-- MORT -->
+  <section data-ecran="mort" data-nom="Mort" data-etats="Tué par une créature|Mort de froid|Mort de faim|Sans couchette|Sans couchette ni pierre">
+    <div class="scene nuit" style="filter:grayscale(.7) brightness(.6)"></div>
+    <div style="position:absolute;inset:0;background:radial-gradient(transparent 30%, rgba(80,0,0,.55))"></div>
+    <div class="centre" style="text-align:center;width:540px">
+      <h1 class="titre-jeu" style="font-size:46px;margin:0;color:#e9d3b0">Tu es tombé</h1>
+      <p style="font-size:18px;margin:6px 0 2px" data-si="Tué par une créature|Sans couchette|Sans couchette ni pierre">Tué par <b>un Rôdeur nocturne</b> <span style="color:#999;font-size:13px">(nom provisoire)</span></p>
+      <p style="font-size:18px;margin:6px 0 2px" data-si="Mort de froid">Mort de <b style="color:var(--froid)">froid</b>, loin de ton Foyer</p>
+      <p style="font-size:18px;margin:6px 0 2px" data-si="Mort de faim">Mort de <b style="color:var(--faim)">faim</b></p>
+      <p style="color:var(--encre-2);margin:0 0 4px">Survécu : 4 jours · Record : 12 jours · Carnet : 2 biomes, 2 créatures, 6 lieux</p>
+      <p style="color:#cfd8ff;margin:0 0 16px;font-size:14px">Il fait nuit — aube dans 4 min. Tu reviens avec faim et chaleur à 50 %.</p>
+      <div class="panneau" style="padding:12px 16px;text-align:left;font-size:14px;margin-bottom:14px">
+        <i class="ic ic-tombe"></i> Ton sac est resté sur ta tombe, à <b>140 m</b> de ton point de retour. Elle est indiquée sur ta boussole et ta carte.
+      </div>
+      <button class="btn principal centre-txt" data-si="Tué par une créature|Mort de froid|Mort de faim">Réapparaître à ta couchette</button>
+      <button class="btn principal centre-txt" data-si="Sans couchette">Réapparaître à la pierre-veilleuse</button>
+      <button class="btn principal centre-txt" data-si="Sans couchette ni pierre">Réapparaître au point de départ</button>
+      <p data-si="Sans couchette|Sans couchette ni pierre" style="font-size:13px;color:#ffe2a8">Astuce : pose une couchette pour réapparaître près de ton Foyer.</p>
+      <button class="btn discret centre-txt">Retour au titre</button>
+    </div>
+  </section>
+
+  <!-- RÉGLAGES -->
+  <section data-ecran="reglages" data-nom="Réglages" data-etats="Contrôles|Changer une touche|Touche déjà prise|Graphismes|Son|Accessibilité">
+    <div class="scene"></div><div class="voile"></div>
+    <div class="panneau fenetre" style="display:block">
+      <div class="reglages">
+        <nav><h3 class="titre-jeu" style="margin:4px 4px 12px">Réglages</h3>
+          <button class="onglet-r" data-onglet="Contrôles|Changer une touche|Touche déjà prise">Contrôles</button><button class="onglet-r" data-onglet="Graphismes">Graphismes</button>
+          <button class="onglet-r" data-onglet="Son">Son</button><button class="onglet-r" data-onglet="Accessibilité">Accessibilité</button>
+          <div style="margin-top:auto"><button class="lien" style="padding-left:0">Rétablir par défaut</button>
+            <button class="btn centre-txt">← Retour</button><p style="font-size:12px;color:#999;margin:0"><span class="touche">Échap</span> retour</p></div></nav>
+        <div class="contenu">
+          <div data-si="Contrôles|Changer une touche|Touche déjà prise">
+            <div class="ligne"><span>Se déplacer</span><span><span class="touche">Z</span> <span class="touche">Q</span> <span class="touche">S</span> <span class="touche">D</span> <button class="lien">changer</button></span></div>
+            <div class="ligne"><span>Sprint</span><span><span class="touche">Maj</span> <button class="lien">changer</button></span></div>
+            <div class="ligne"><span>Attaquer / utiliser l'objet</span><span><span class="touche">Clic</span> <button class="lien">changer</button></span></div>
+            <div class="ligne"><span>Manger / action secondaire</span><span><span class="touche">Clic droit</span> <button class="lien">changer</button></span></div>
+            <div class="ligne"><span>Interagir / récolter</span><span><span class="touche">E</span> <button class="lien">changer</button></span></div>
+            <div class="ligne"><span>Barre rapide</span><span><span class="touche">1</span>–<span class="touche">8</span> ou molette</span></div>
+            <div class="ligne"><span>Sac</span><span><span class="touche">Tab</span> <button class="lien">changer</button></span></div>
+            <div class="ligne" data-classe-si="Changer une touche:ecoute|Touche déjà prise:ecoute"><span>Carte</span>
+              <span data-si="Contrôles"><span class="touche">M</span> <button class="lien">changer</button></span>
+              <span data-si="Changer une touche" style="color:var(--or)">Appuie sur une touche… (<span class="touche">Échap</span> annuler)</span>
+              <span data-si="Touche déjà prise" style="color:#ff9d9d">E est déjà utilisée par « Interagir ». <button class="lien">Échanger</button></span></div>
+            <div class="ligne"><span>Pause</span><span><span class="touche">Échap</span> (fixe)</span></div>
+            <div class="ligne"><span>Sensibilité de la souris</span><span class="val"><input type="range" value="50"><output>50</output></span></div>
+            <div class="ligne"><span>Inverser l'axe vertical</span><span class="selecteur"><button class="actif">Non</button><button>Oui</button></span></div>
+          </div>
+          <div data-si="Graphismes">
+            <div class="ligne"><span>Qualité</span><span class="selecteur"><button>Basse</button><button class="actif">Moyenne</button><button>Haute</button></span></div>
+            <div class="ligne"><span>Distance d'affichage</span><span class="val"><input type="range" value="40"><output>5</output></span></div>
+            <div class="ligne"><span>Ombres</span><span class="selecteur"><button class="actif">Non</button><button>Oui</button></span></div>
+            <div class="ligne"><span>Luminosité</span><span class="val"><input type="range" value="55"><output>55</output></span></div>
+            <div class="ligne"><span>Afficher les images/seconde</span><span class="selecteur"><button class="actif">Non</button><button>Oui</button></span></div>
+          </div>
+          <div data-si="Son">
+            <div class="ligne"><span>Volume général</span><span class="val"><input type="range" value="80"><output>80</output></span></div>
+            <div class="ligne"><span>Effets</span><span class="val"><input type="range" value="80"><output>80</output></span></div>
+            <div class="ligne"><span>Musique</span><span class="val"><input type="range" value="60"><output>60</output></span></div>
+          </div>
+          <div data-si="Accessibilité">
+            <div class="ligne"><span>Taille de l'interface</span><span class="val"><input type="range" value="40"><output>100 %</output></span></div>
+            <div class="ligne"><span>Indices d'aide</span><span class="selecteur"><button>Non</button><button class="actif">Oui</button></span></div>
+            <div class="ligne"><span>Objectifs de début de partie</span><span class="selecteur"><button>Non</button><button class="actif">Oui</button></span></div>
+            <div class="ligne"><span>Réduire les secousses et clignotements</span><span class="selecteur"><button class="actif">Non</button><button>Oui</button></span></div>
+            <div class="ligne"><span>Indicateur visuel des attaques</span><span class="selecteur"><button>Non</button><button class="actif">Oui</button></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div></div></div>
+
+<div class="annot" id="annot"></div>
+
+<script>
+  const notes = {
+    "titre": ["« Continuer » en premier quand un monde existe.", "« Quitter » seulement dans la version ordinateur.", "Nom du jeu : à trouver."],
+    "nouveau": ["Un clic suffit : nom pré-rempli, graine cachée dans « Options avancées »."],
+    "charger": ["États : liste, vide, sauvegarde illisible, mise à jour, suppression, import refusé, version ordinateur.", "Export / import en fichier : protège d'un navigateur qui efface ses données, et fait le pont avec la version ordinateur."],
+    "chargement": ["Le joueur n'apparaît qu'une fois le sol généré.", "Une astuce à chaque chargement."],
+    "hud-jour": ["Haut centre : boussole (Foyer, tombes, pierre activée la plus proche). Haut droite : mini-carte entourée d'un anneau jour/crépuscule/nuit, heure et compte à rebours de l'assaut dessous.", "Bas gauche : vie (rond), faim (carré), chaleur (hexagone, rayée bleue quand on a froid) + flèche de tendance ▼▲.", "« Crépuscule » : le moment de décider si on rentre — fond orangé, distance au Foyer, direction de l'assaut.", "Retour des actions : progression de récolte, « +2 bois », message de fabrication.", "Les décors sont des formes provisoires ; les icônes aussi (le jeu aura les siennes)."],
+    "hud-nuit": ["La mini-carte ne se révèle que près de toi la nuit.", "Attaque hors champ : arc rouge + « Attaque ! ». Combat : barre de vie de la créature visée et dégâts infligés.", "Réparer : état de la palissade visée et coût de réparation.", "Nuit d'assaut : direction d'arrivée sur la boussole."],
+    "inventaire": ["4 onglets : Sac, Fabriquer, Construire, Carnet (touches 1–4).", "Le jeu continue pendant qu'on fouille son sac, ton perso s'arrête (comme pour la carte).", "Manger : bouton dans le sac, ou clic droit sur la nourriture de la barre rapide.", "Carnet : jours survécus, record, biomes, créatures, lieux."],
+    "coffre": ["Deux colonnes sac ↔ coffre, « Tout ranger » / « Tout prendre ».", "Tombe : « Tout récupérer » ; si le sac est plein, la tombe garde le reste."],
+    "carte": ["M ouvre et ferme, Échap = pause.", "Le jeu continue, ton perso s'arrête ; jauges et alerte d'attaque restent visibles, le bord clignote en rouge si on t'attaque.", "Ne montre que ce que tu as exploré de près ; jamais les ressources.", "3 niveaux de zoom. Une épingle personnelle (clic droit), reportée sur la boussole."],
+    "pose": ["Fantôme bleu ✓ ou rouge en pointillés ✗ + raison écrite.", "Jauges et heure restent visibles : le temps tourne."],
+    "pause": ["Le seul endroit où le jeu s'arrête vraiment.", "« Clique pour reprendre » : imposé par le navigateur quand on sort avec Échap."],
+    "mort": ["Cause, jours survécus, record, carnet.", "Heure qu'il fait et état au retour : faim et chaleur remontées à 50 % au minimum.", "Réapparition : couchette, sinon pierre-veilleuse, sinon point de départ."],
+    "reglages": ["Retour toujours visible + Échap.", "Changer une touche : écoute, conflit avec échange proposé, rétablir par défaut."]
+  };
+  const ecran = document.getElementById('ecran'), nav = document.getElementById('nav'), etatsBar = document.getElementById('etats'), annot = document.getElementById('annot');
+  const sections = [...ecran.querySelectorAll('section')];
+
+  sections.forEach(s => {
+    const b = document.createElement('button');
+    b.textContent = s.dataset.nom; b.onclick = () => montrer(s);
+    s._btn = b; nav.appendChild(b);
+  });
+
+  function appliquerEtat(s, etat) {
+    s.querySelectorAll('[data-si]').forEach(el => { el.style.display = el.dataset.si.split('|').includes(etat) ? '' : 'none'; });
+    s.querySelectorAll('[data-classe-si]').forEach(el => {
+      const regles = el.dataset.classeSi.split('|').map(r => r.split(':'));
+      new Set(regles.map(r => r[1])).forEach(c => el.classList.toggle(c, regles.some(([e, cl]) => cl === c && e === etat)));
+    });
+    s.querySelectorAll('[data-onglet]').forEach(el => el.classList.toggle('actif', el.dataset.onglet.split('|').includes(etat)));
+    s.querySelectorAll('[data-w]').forEach(el => {
+      const [def, ...cas] = el.dataset.w.split(';');
+      const trouve = cas.map(c => c.split('=')).find(([e]) => e === etat);
+      el.style.transform = 'scaleX(' + (trouve ? trouve[1] : def) + ')';
+    });
+    s.querySelectorAll('.plein-x').forEach(c => c.textContent = /plein/i.test(etat) ? '🪨' : '');
+    etatsBar.querySelectorAll('button').forEach(b => b.classList.toggle('actif', b.textContent === etat));
+  }
+
+  function montrer(s) {
+    sections.forEach(x => { x.classList.toggle('visible', x === s); x._btn.classList.toggle('actif', x === s); });
+    const etats = s.dataset.etats.split('|');
+    etatsBar.innerHTML = '<span>États :</span>';
+    etats.forEach(e => { const b = document.createElement('button'); b.textContent = e; b.onclick = () => appliquerEtat(s, e); etatsBar.appendChild(b); });
+    const n = document.createElement('span'); n.className = 'note'; n.textContent = 'Formes et icônes provisoires — pas le rendu final'; etatsBar.appendChild(n);
+    appliquerEtat(s, etats[0]);
+    annot.innerHTML = '<h2>' + s.dataset.nom + ' — à regarder</h2><ul>' + (notes[s.dataset.ecran] || []).map(t => '<li>' + t + '</li>').join('') + '</ul>';
+    history.replaceState(null, '', '#' + s.dataset.ecran);
+  }
+
+  const cadre = document.getElementById('cadre');
+  const ajuster = () => { ecran.style.transform = 'scale(' + cadre.clientWidth / 1280 + ')'; };
+  new ResizeObserver(ajuster).observe(cadre); ajuster();
+
+  montrer(sections.find(s => '#' + s.dataset.ecran === location.hash) || sections[0]);
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  // Tests (Vitest, Node) et fichiers d'outillage. Voient les couches via les références, jamais l'inverse.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": ".tsbuild/test",
+    "tsBuildInfoFile": ".tsbuild/test.tsbuildinfo"
+  },
+  "references": [
+    { "path": "./tsconfig.core.json" },
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.render-data.json" },
+    { "path": "./tsconfig.dom.json" }
+  ],
+  "include": ["src/**/*.test.ts", "tests/**/*.ts", "vitest.config.ts", "vite.config.ts"],
+  "exclude": ["**/__lint_fixtures__/**"]
+}

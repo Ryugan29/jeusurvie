@@ -1,0 +1,13 @@
+{
+  // Le cœur : ni DOM (lib ES2022 seule), ni Node (types: []). Les tests ont leur propre projet.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "rootDir": "src/core",
+    "outDir": ".tsbuild/core",
+    "tsBuildInfoFile": ".tsbuild/core.tsbuildinfo"
+  },
+  "include": ["src/core/**/*.ts"],
+  "exclude": ["src/core/**/*.test.ts", "**/__lint_fixtures__/**"]
+}

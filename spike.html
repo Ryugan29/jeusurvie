@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spike « beau et fluide » — scène et lumière</title>
+    <link rel="icon" href="data:," />
+    <!-- Styles dans un fichier (pas en ligne) : la CSP du build peut interdire les styles en ligne. -->
+    <link rel="stylesheet" href="/src/spike/spike.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="panel">
+      <p id="fps">— images/s</p>
+      <p id="info"></p>
+      <p id="cover"></p>
+      <p id="seed"></p>
+      <p class="keys">1 matin · 2 midi · 3 crépuscule · 4 nuit · 5 cycle ×60 · 6 météo · Maj marcher · F masquer · Échap pause</p>
+    </div>
+    <div id="overlay"><p id="overlay-text">Cliquer pour jouer</p></div>
+    <script type="module" src="/src/spike/scene-main.ts"></script>
+  </body>
+</html>
