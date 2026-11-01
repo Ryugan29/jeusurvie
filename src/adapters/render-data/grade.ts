@@ -15,10 +15,15 @@ export interface Grade {
   readonly hue: number;
 }
 
-/** Étalonnage de plein jour : aucune saturation ajoutée (ADR 0012 : la lumière et les matières font les couleurs). */
-export const DAY_GRADE = { exposure: 1.0, saturation: 0 } as const;
-/** Ce que la nuit retire au plus profond (étoiles pleines). */
-const NIGHT_EXPOSURE_DROP = 0.25;
+/**
+ * Étalonnage de plein jour (ADR 0012). Exposition 1,6 : comme un appareil photo réglé sur la scène — les albédos réels (herbe ~15 %,
+ * terre ~10 %) renvoient bien moins de lumière que les couleurs vives d'avant ; à 1, la forêt de midi s'affichait comme au crépuscule
+ * (luminance moyenne mesurée à l'écran : 0,6 fois celle d'avant). Saturation +10 : celle d'une pellicule couleur, pas d'une
+ * illustration (mesurée à l'écran : moitié moins saturé qu'avant, contre trois fois moins sans elle).
+ */
+export const DAY_GRADE = { exposure: 1.6, saturation: 10 } as const;
+/** Ce que la nuit retire au plus profond (étoiles pleines) : la même part qu'avant (1/4 de l'exposition de jour). */
+const NIGHT_EXPOSURE_DROP = 0.4;
 const NIGHT_DESATURATION = 50;
 /** Teinte orangée du soleil bas : force maximale, et écart rouge − bleu de la lumière où elle commence / est pleine. */
 const WARMTH_MAX = 14;

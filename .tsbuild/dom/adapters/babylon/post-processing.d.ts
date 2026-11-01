@@ -5,11 +5,11 @@ import { type Grade } from '../render-data/grade';
 import type { PostQuality } from '../render-data/quality';
 export declare const COLOR_GRADE: {
     /** Luminosité globale de jour (1 = inchangée). */
-    readonly exposure: 1;
+    readonly exposure: 1.6;
     /** Contraste (1 = inchangé) : la courbe ACES en donne déjà ; un léger supplément seulement. */
     readonly contrast: 1.06;
     /** Saturation ajoutée de jour (−100 à 100) : aucune, la lumière et les matières font les couleurs. */
-    readonly saturation: 0;
+    readonly saturation: 10;
     /** Luminance (HDR) à partir de laquelle une zone « rayonne » : le disque du soleil et les éclairs, pas la neige au soleil de midi
      * (≈ 1,8 avant étalonnage). */
     readonly bloomThreshold: 2;

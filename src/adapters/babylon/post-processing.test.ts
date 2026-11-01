@@ -62,7 +62,7 @@ describe('createPostProcessing (effets d’image, vrai moteur sans carte graphiq
     expect(SKY_SUN_DISC_HDR * luminance(noon.sunColor)).toBeGreaterThan(COLOR_GRADE.bloomThreshold * 2);
   });
 
-  it('développement réaliste : tone mapping, contraste léger, aucune saturation ajoutée de jour (ADR 0012)', () => {
+  it('développement réaliste : tone mapping, contraste léger, saturation de pellicule (ADR 0012)', () => {
     const pipeline = createPostProcessing(scene, camera);
     const ip = pipeline.imageProcessing!;
     expect(pipeline.imageProcessingEnabled).toBe(true);
@@ -71,7 +71,8 @@ describe('createPostProcessing (effets d’image, vrai moteur sans carte graphiq
     expect(ip.exposure).toBeCloseTo(COLOR_GRADE.exposure, 6);
     expect(ip.colorCurvesEnabled).toBe(true);
     expect(ip.colorCurves!.globalSaturation).toBeCloseTo(COLOR_GRADE.saturation, 6);
-    expect(COLOR_GRADE.saturation).toBe(0);
+    expect(COLOR_GRADE.saturation).toBeGreaterThanOrEqual(0);
+    expect(COLOR_GRADE.saturation).toBeLessThanOrEqual(12); // une pellicule, pas une illustration (+20 avant l'ADR 0012)
     expect(COLOR_GRADE.contrast).toBeGreaterThanOrEqual(1);
     expect(COLOR_GRADE.vignetteWeight).toBeLessThan(1); // vignettage d'objectif, pas un cadre d'illustration
   });

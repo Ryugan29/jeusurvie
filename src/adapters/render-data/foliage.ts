@@ -43,12 +43,12 @@ export function foliageProfileFor(materialName: string): FoliageProfile | undefi
  * nuancier de l'herbe ~0,37.
  */
 export const FOLIAGE_ALBEDO: Readonly<Record<FoliageKind, { readonly saturation: number; readonly value: number }>> = {
-  grass: { saturation: 0.62, value: 0.42 },
-  plant: { saturation: 0.66, value: 0.68 },
+  grass: { saturation: 0.74, value: 0.48 },
+  plant: { saturation: 0.78, value: 0.72 },
   flower: { saturation: 0.82, value: 0.72 },
-  tree: { saturation: 0.66, value: 0.95 },
-  pine: { saturation: 0.7, value: 1.2 },
-  bush: { saturation: 0.66, value: 0.9 },
+  tree: { saturation: 0.78, value: 1 },
+  pine: { saturation: 0.8, value: 1.25 },
+  bush: { saturation: 0.78, value: 0.95 },
 };
 
 /**
