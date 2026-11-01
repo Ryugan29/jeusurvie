@@ -26,6 +26,11 @@ const PCF_QUALITY: Readonly<Record<Exclude<ShadowFilter, 'pcss'>, number>> = {
 };
 /** Taille apparente de la source (part de la carte d'ombre) pour la pénombre PCSS : un soleil net, sans flou exagéré. */
 const PCSS_LIGHT_SIZE = 0.035;
+/**
+ * Échantillons PCSS (recherche des bloqueurs + flou) : LOW = 16 + 16, MEDIUM = 16 + 32, HIGH = 32 + 64. Pénombre aussi fine :
+ * LOW suffit, images identiques à l'œil ; mesuré en ULTRA sur RTX 2080 (2560 px) : HIGH coûtait ~15 ms par image de plus.
+ */
+const PCSS_QUALITY = ShadowGenerator.QUALITY_LOW;
 
 export class SunShadows {
   readonly generator: CascadedShadowGenerator;
@@ -43,7 +48,7 @@ export class SunShadows {
     if (quality.filter === 'pcss') {
       g.useContactHardeningShadow = true;
       g.contactHardeningLightSizeUVRatio = PCSS_LIGHT_SIZE;
-      g.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+      g.filteringQuality = PCSS_QUALITY;
     } else {
       g.usePercentageCloserFiltering = true;
       g.filteringQuality = PCF_QUALITY[quality.filter];

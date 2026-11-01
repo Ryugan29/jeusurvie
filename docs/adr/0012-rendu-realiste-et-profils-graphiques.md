@@ -64,8 +64,8 @@ Les ombres en cascade sont refaites si leur qualité change ; un registre redonn
 | | LOW | MEDIUM | HIGH | ULTRA |
 |---|---|---|---|---|
 | Image | sans MSAA, FXAA, 1× | MSAA 2×, FXAA, ≤1,25× | MSAA 4×, FXAA, ≤1,5× | MSAA 8× (plafonné par la carte), ≤2× |
-| Ombres | 2×1024, 60 m, PCF bas | 3×1024, 100 m, PCF moyen | 4×2048, 150 m, PCF haut | 4×4096, 220 m, PCSS (pénombre) |
-| Occlusion | — | SSAO 8 éch., ½ | SSAO 16 éch., ¾ | SSAO 32 éch., pleine, flou bilatéral |
+| Ombres | 2×1024, 60 m, PCF bas | 3×1024, 100 m, PCF moyen | 4×2048, 150 m, PCF haut | 4×4096, 220 m, PCSS 16 éch. (pénombre) |
+| Occlusion | — | SSAO 8 éch., ½ | SSAO 16 éch., ¾ | SSAO 16 éch., pleine, flou bilatéral |
 | Reflets | ciel seulement | ciel seulement | SSR ½ (sol mouillé) | SSR plein, flou selon rugosité |
 | Atmosphère | brume des matériaux | perspective atmosphérique | idem | idem |
 | Ciel | nuages plats, sonde 32 px / 2 s | en couches, 64 px / 1 s | en couches, 128 px / 0,5 s | en volume, 256 px / 0,25 s |
@@ -73,6 +73,12 @@ Les ombres en cascade sont refaites si leur qualité change ; un registre redonn
 | Sol | 256 px, sans relief | 512 px, relief | 1024 px | 2048 px |
 | Distances | 320 m, lointain 2 km, végétation ×0,6, couvre-sol 35 m à 50 % | 448 m, 3 km, ×0,8, 55 m à 75 % | 512 m, 4 km, ×1, 70 m | 640 m, 6 km, ×1,35, 90 m |
 | Pluie | 1 500 gouttes | 3 000 | 6 000 | 9 000 |
+
+Ajustement du 2026-11-01 (mesuré sur RTX 2080, 2560 px, captures comparées à l'œil) : ULTRA passait 38 ms par image sur la carte
+graphique, dont ~18 ms pour le seul filtrage PCSS. PCSS en qualité LOW (16 + 16 échantillons au lieu de 32 + 64) : ~15 ms de
+gagnés, pénombre identique (elle est fine). SSAO 32 → 16 échantillons avec le flou bilatéral, qui n'était jamais appliqué
+(`configureAo` le forçait à faux) : ~2 ms. MSAA gardé à 8× : 4× ne rendait que ~2 ms au prix de l'alpha-to-coverage du feuillage.
+Résultat : ~26 → ~40 images/s dans la scène de mesure (GPU ~38 → ~23-25 ms par image).
 
 ### 6. Interface
 Réglages → Graphismes (maquette v1) :

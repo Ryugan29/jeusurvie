@@ -70,6 +70,12 @@ describe('qualityFor (quatre profils)', () => {
     expect(ultra.ssr!.blur).toBe(true);
   });
 
+  it('ULTRA ne paie pas ce qui ne se voit pas : occlusion à 16 échantillons au plus, lissés par le flou soigné', () => {
+    const ao = qualityFor('ultra').ao!;
+    expect(ao.samples).toBeLessThanOrEqual(16);
+    expect(ao.expensiveBlur).toBe(true);
+  });
+
   it('chaque profil fait au moins aussi bien que le précédent, partout', () => {
     nonDecreasing((q) => q.image.msaa);
     nonDecreasing((q) => q.image.maxPixelRatio);

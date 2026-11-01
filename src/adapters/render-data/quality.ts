@@ -199,10 +199,13 @@ const LEVELS: Readonly<Record<QualityLevel, Omit<QualitySettings, 'level'>>> = {
     distances: { viewRadiusM: 512, farTerrain: { halfSizeM: 4000, stepM: 40 }, vegetationRange: 1, coverRadiusM: 70, coverDensity: 1 },
     rainDrops: 6000,
   },
+  // ULTRA paie ce qui se voit. Mesuré sur RTX 2080 (2560 px), images comparées à l'œil : occlusion 32 → 16 échantillons, lissés
+  // par le flou bilatéral (désormais vraiment appliqué), ~2 ms de gagnés pour la même image. MSAA gardé à 8× : 4× ne rendait que
+  // ~2 ms et les feuilles découpées (alpha-to-coverage) n'auraient plus que 5 niveaux de transparence au lieu de 9.
   ultra: {
     image: { msaa: 8, maxPixelRatio: 2, fxaa: false },
     shadows: { cascades: 4, mapSize: 4096, rangeM: 220, filter: 'pcss' },
-    ao: { samples: 32, ratio: 1, radiusM: 1.1, strength: 1.1, expensiveBlur: true },
+    ao: { samples: 16, ratio: 1, radiusM: 1.1, strength: 1.1, expensiveBlur: true },
     ssr: { ratio: 1, steps: 64, maxDistanceM: 120, blur: true },
     rays: { samples: 48, ratio: 0.5, occluderRangeM: 300 },
     sky: { clouds: 'volumetric', envProbeSize: 256, envProbeRefreshS: 0.25 },

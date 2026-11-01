@@ -26,6 +26,15 @@ describe('configureAo (occlusion ambiante à l’écran : court rayon, discrète
     expect(target.bypassBlur).toBe(false);
   });
 
+  it('flou soigné (bilatéral) seulement si le profil le demande : il lisse un échantillonnage plus léger', () => {
+    const ultra = blank();
+    configureAo(ultra, qualityFor('ultra').ao!);
+    expect(ultra.expensiveBlur).toBe(true);
+    const high = blank();
+    configureAo(high, qualityFor('high').ao!);
+    expect(high.expensiveBlur).toBe(false);
+  });
+
   it('discrète : jamais complètement noire, la couleur de base garde une part de lumière', () => {
     const target = blank();
     configureAo(target, qualityFor('medium').ao!);

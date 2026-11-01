@@ -32,7 +32,7 @@ export function configureAo(target: AoSettings, quality: AoQuality): void {
   target.base = AO_BASE;
   target.maxZ = AO_FAR_M;
   target.minZAspect = 0.5;
-  target.expensiveBlur = false;
+  target.expensiveBlur = quality.expensiveBlur;
   target.bypassBlur = false;
 }
 

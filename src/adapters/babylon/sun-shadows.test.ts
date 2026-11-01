@@ -63,6 +63,11 @@ describe('SunShadows (ombres en cascade du soleil, vrai moteur sans carte graphi
     expect(pcss.contactHardeningLightSizeUVRatio).toBeLessThan(0.1); // un soleil net, pas une lampe diffuse
   });
 
+  it('PCSS en 16 échantillons : avec une pénombre aussi fine, 64 coûtaient ~15 ms de plus pour une image identique', () => {
+    const pcss = new SunShadows(sun, camera, { ...OPTIONS, filter: 'pcss' }).generator;
+    expect(pcss.filteringQuality).toBe(ShadowGenerator.QUALITY_LOW);
+  });
+
   it('addCaster : le maillage projette une ombre, une seule fois même si on l’ajoute deux fois', () => {
     const shadows = new SunShadows(sun, camera, OPTIONS);
     const tree = CreateBox('arbre', {}, scene);
