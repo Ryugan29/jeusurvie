@@ -1,0 +1,29 @@
+# Unity generated
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.pidb
+*.booproj
+*.unityproj
+.vs/
+.idea/
+# Original Babylon assets copied by the importer (CC0 packs, not versioned in the original repo either)
+/Assets/StreamingAssets/assets/
+/Assets/StreamingAssets/assets.meta
+# dotnet test harness outputs
+/Tools~/CoreTests/bin/
+/Tools~/CoreTests/obj/
+/Tools~/UnityCompileCheck/bin/
+/Tools~/UnityCompileCheck/obj/
+!/Tools~/CoreTests/CoreTests.csproj
+!/Tools~/UnityCompileCheck/UnityCompileCheck.csproj
