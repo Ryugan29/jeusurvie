@@ -33,6 +33,31 @@ export function foliageProfileFor(materialName: string): FoliageProfile | undefi
   return Object.hasOwn(PROFILES, materialName) ? PROFILES[materialName] : undefined;
 }
 
+/**
+ * Albédo réaliste de la végétation (ADR 0012). Les textures du pack sont peintes en couleurs vives (verts sans aucun bleu, herbe
+ * ~2,5 fois plus claire qu'une vraie prairie) et le matériau léger les lisait telles quelles, en sRGB, comme si c'était de la
+ * lumière linéaire : la végétation ressortait deux fois plus claire et plus saturée que le sol physique. Le shader les repasse en
+ * linéaire, puis les ramène vers le gris (saturation, 1 = inchangée) et à une luminosité de feuille réelle (facteur) : herbe et
+ * feuilles ~10 à 18 % de la lumière, aiguilles de pin plus sombres, fleurs plus colorées.
+ * Mesuré sur les textures (linéaire, moyenne des pixels utiles) : feuillus 0,16, pins 0,08, feuillage des buissons et plantes 0,23,
+ * nuancier de l'herbe ~0,37.
+ */
+export const FOLIAGE_ALBEDO: Readonly<Record<FoliageKind, { readonly saturation: number; readonly value: number }>> = {
+  grass: { saturation: 0.74, value: 0.48 },
+  plant: { saturation: 0.78, value: 0.72 },
+  flower: { saturation: 0.82, value: 0.72 },
+  tree: { saturation: 0.78, value: 1 },
+  pine: { saturation: 0.8, value: 1.25 },
+  bush: { saturation: 0.78, value: 0.95 },
+};
+
+/**
+ * Marge de lumière du matériau léger : il plafonne l'éclairage diffus à 1 avant de multiplier par la couleur ; sous le soleil HDR
+ * (jusqu'à ~1,6 sur le sol), une feuille saturait. La lumière est divisée par cette marge avant le plafond, la couleur multipliée
+ * d'autant après : même résultat sous le plafond, et jusqu'à 2 fois plus de lumière avant de saturer.
+ */
+export const FOLIAGE_HDR_HEADROOM = 2;
+
 /** Multiplicateurs de couleur du dégradé : pied à l'ombre des autres brins (vert froid, sombre), pointe au soleil (jaune-vert). */
 export const SHADE_FOOT: Rgb = [0.55, 0.62, 0.58];
 export const SHADE_TIP: Rgb = [1.12, 1.06, 0.8];

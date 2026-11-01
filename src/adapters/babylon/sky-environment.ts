@@ -47,6 +47,12 @@ export class SkyEnvironment {
    * À chaque image (durée en s, position de la caméra) : refait le cube quand l'intervalle est écoulé. La sonde se place à la caméra :
    * le dôme la suit, une sonde restée à l'origine finirait hors du ciel à quelques kilomètres du départ.
    */
+  /** Retire la sonde (changement de profil graphique : une nouvelle, d'une autre taille, la remplace). */
+  dispose(): void {
+    if (this.scene.environmentTexture === this.probe.cubeTexture) this.scene.environmentTexture = null;
+    this.probe.dispose();
+  }
+
   update(frameS: number, x: number, y: number, z: number): void {
     this.sinceRefreshS += frameS;
     if (this.sinceRefreshS < this.options.refreshS) return;

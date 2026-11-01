@@ -60,21 +60,20 @@ interface Key {
   readonly rays: number;
 }
 
-// Palette « fantasy colorée » des aperçus du pack : ciel bleu vif, lumière dorée, ombres bleutées. Le crépuscule est
-// orange doré (le rose, mêlé au vert de l'herbe, donnait un sol boueux) ; le matin, pêche et doux.
-// Lumière « peinte » : de jour, le soleil est chaud et l'ambiance (ce qui éclaire l'ombre) franchement bleue, bleu profond
-// au crépuscule — l'écart chaud/froid dessine les volumes, comme sur une illustration. Le soleil couchant est doré plutôt
-// qu'orange profond, et l'ombre bleue plutôt que violette : sur l'herbe verte, l'orange et le violet donnaient de l'olive.
+// Lumière réaliste (ADR 0012) : ciel de diffusion (zénith bleu moyen, horizon blanc-bleuté et plus clair), soleil presque blanc à
+// midi (~5 800 K), doré quand il est bas, orangé au couchant ; ombres éclairées par un ciel bleu (l'écart chaud/froid dessine
+// toujours les volumes, mais sans les teintes saturées d'une illustration) ; nuit sombre et bleutée où la lune découpe le relief.
+// Les rapports d'éclairement restent ceux validés (sol plat ≤ 1 à midi, relief lisible : voir les tests).
 const DAWN: Omit<Key, 'at'> = {
-  zenith: [0.36, 0.5, 0.82],
-  horizon: [1, 0.74, 0.52],
-  fog: [0.96, 0.76, 0.58],
-  sun: [1, 0.72, 0.4],
+  zenith: [0.26, 0.36, 0.62],
+  horizon: [0.92, 0.72, 0.56],
+  fog: [0.86, 0.72, 0.6],
+  sun: [1, 0.7, 0.45],
   sunI: 0,
-  ambient: [0.7, 0.66, 0.88],
+  ambient: [0.62, 0.62, 0.8],
   ambientI: 0.55,
-  cloud: [1, 0.8, 0.62],
-  cloudShade: [0.62, 0.55, 0.72],
+  cloud: [1, 0.78, 0.64],
+  cloudShade: [0.52, 0.5, 0.62],
   stars: 0,
   glow: 0,
   rays: 0,
@@ -82,14 +81,14 @@ const DAWN: Omit<Key, 'at'> = {
 
 const KEYS: readonly Key[] = [
   { at: 0, ...DAWN },
-  { at: 0.08, zenith: [0.22, 0.5, 0.96], horizon: [0.66, 0.82, 0.98], fog: [0.98, 0.82, 0.64], sun: [1, 0.8, 0.48], sunI: 1, ambient: [0.6, 0.68, 0.98], ambientI: 0.7, cloud: [1, 0.9, 0.8], cloudShade: [0.7, 0.72, 0.88], stars: 0, glow: 0.85, rays: 0.7 },
-  { at: 0.3, zenith: [0.16, 0.46, 0.97], horizon: [0.5, 0.8, 0.98], fog: [0.6, 0.8, 0.97], sun: [1, 0.9, 0.7], sunI: 0.85, ambient: [0.6, 0.72, 1], ambientI: 0.42, cloud: [1, 1, 1], cloudShade: [0.68, 0.78, 0.93], stars: 0, glow: 0.7, rays: 0.35 },
-  { at: DUSK_AT - 0.05, zenith: [0.24, 0.5, 0.92], horizon: [0.95, 0.84, 0.6], fog: [0.94, 0.8, 0.6], sun: [1, 0.84, 0.54], sunI: 0.8, ambient: [0.62, 0.7, 0.98], ambientI: 0.52, cloud: [1, 0.93, 0.82], cloudShade: [0.72, 0.74, 0.88], stars: 0, glow: 0.8, rays: 0.5 },
-  { at: DUSK_AT + 0.06, zenith: [0.2, 0.3, 0.72], horizon: [1, 0.6, 0.14], fog: [1, 0.66, 0.3], sun: [1, 0.66, 0.3], sunI: 0.55, ambient: [0.48, 0.58, 0.92], ambientI: 0.6, cloud: [1, 0.74, 0.42], cloudShade: [0.56, 0.42, 0.6], stars: 0, glow: 1, rays: 0.8 },
+  { at: 0.08, zenith: [0.24, 0.4, 0.76], horizon: [0.84, 0.78, 0.7], fog: [0.86, 0.79, 0.68], sun: [1, 0.82, 0.6], sunI: 1, ambient: [0.56, 0.65, 0.9], ambientI: 0.68, cloud: [1, 0.9, 0.8], cloudShade: [0.6, 0.6, 0.72], stars: 0, glow: 0.85, rays: 0.7 },
+  { at: 0.3, zenith: [0.2, 0.36, 0.78], horizon: [0.62, 0.74, 0.9], fog: [0.66, 0.75, 0.87], sun: [1, 0.95, 0.87], sunI: 0.85, ambient: [0.57, 0.68, 0.95], ambientI: 0.42, cloud: [1, 1, 1], cloudShade: [0.58, 0.63, 0.72], stars: 0, glow: 0.6, rays: 0.3 },
+  { at: DUSK_AT - 0.05, zenith: [0.22, 0.37, 0.74], horizon: [0.88, 0.8, 0.66], fog: [0.84, 0.77, 0.64], sun: [1, 0.86, 0.64], sunI: 0.8, ambient: [0.6, 0.68, 0.92], ambientI: 0.52, cloud: [1, 0.94, 0.84], cloudShade: [0.62, 0.64, 0.74], stars: 0, glow: 0.8, rays: 0.5 },
+  { at: DUSK_AT + 0.06, zenith: [0.17, 0.22, 0.48], horizon: [1, 0.57, 0.27], fog: [0.94, 0.63, 0.4], sun: [1, 0.63, 0.32], sunI: 0.55, ambient: [0.46, 0.53, 0.8], ambientI: 0.6, cloud: [1, 0.68, 0.43], cloudShade: [0.46, 0.38, 0.5], stars: 0, glow: 1, rays: 0.8 },
   // Au coucher, le soleil garde sa couleur jusqu'à s'éteindre (intensité nulle) : la lune prend le relais sans qu'on voie la bascule.
-  { at: NIGHT_AT, zenith: [0.12, 0.14, 0.36], horizon: [0.34, 0.3, 0.54], fog: [0.28, 0.28, 0.46], sun: [1, 0.6, 0.26], sunI: 0, ambient: [0.46, 0.52, 0.78], ambientI: 0.45, cloud: [0.5, 0.5, 0.72], cloudShade: [0.2, 0.22, 0.42], stars: 0.25, glow: 0, rays: 0 },
-  { at: 0.85, zenith: [0.03, 0.05, 0.16], horizon: [0.1, 0.14, 0.3], fog: [0.1, 0.13, 0.26], sun: [0.62, 0.72, 1], sunI: 0.35, ambient: [0.42, 0.5, 0.82], ambientI: 0.45, cloud: [0.3, 0.36, 0.6], cloudShade: [0.1, 0.13, 0.3], stars: 1, glow: 0.45, rays: 0 },
-  { at: 0.97, zenith: [0.12, 0.14, 0.34], horizon: [0.42, 0.36, 0.56], fog: [0.36, 0.33, 0.5], sun: [0.62, 0.72, 1], sunI: 0.05, ambient: [0.52, 0.52, 0.74], ambientI: 0.48, cloud: [0.5, 0.46, 0.68], cloudShade: [0.22, 0.22, 0.4], stars: 0.4, glow: 0.1, rays: 0 },
+  { at: NIGHT_AT, zenith: [0.08, 0.1, 0.24], horizon: [0.3, 0.26, 0.38], fog: [0.25, 0.25, 0.36], sun: [1, 0.6, 0.3], sunI: 0, ambient: [0.42, 0.48, 0.72], ambientI: 0.45, cloud: [0.42, 0.42, 0.58], cloudShade: [0.16, 0.17, 0.3], stars: 0.25, glow: 0, rays: 0 },
+  { at: 0.85, zenith: [0.018, 0.028, 0.08], horizon: [0.07, 0.09, 0.17], fog: [0.07, 0.09, 0.16], sun: [0.66, 0.74, 0.96], sunI: 0.35, ambient: [0.38, 0.46, 0.74], ambientI: 0.45, cloud: [0.22, 0.25, 0.4], cloudShade: [0.07, 0.08, 0.16], stars: 1, glow: 0.45, rays: 0 },
+  { at: 0.97, zenith: [0.1, 0.12, 0.26], horizon: [0.38, 0.32, 0.43], fog: [0.31, 0.29, 0.39], sun: [0.66, 0.74, 0.96], sunI: 0.05, ambient: [0.5, 0.5, 0.7], ambientI: 0.48, cloud: [0.44, 0.4, 0.55], cloudShade: [0.19, 0.19, 0.31], stars: 0.4, glow: 0.1, rays: 0 },
   { at: 1, ...DAWN },
 ];
 
@@ -185,12 +184,17 @@ export function skyWeight(heightFraction: number): number {
   return Math.sqrt(Math.min(1, Math.max(0, heightFraction)));
 }
 
-/** Assombrissement maximal de l'ombre projetée (en plein soleil). */
-const SHADOW_MAX = 0.7;
+/**
+ * Assombrissement maximal de l'ombre projetée (en plein soleil) : l'objet cache presque tout le soleil, seule la lumière du ciel
+ * (ambiance, environnement) éclaire l'ombre — des ombres franches qui donnent du volume, jamais noires (ADR 0012).
+ */
+const SHADOW_MAX = 0.88;
 /** Intensité de l'astre à partir de laquelle l'ombre atteint sa force maximale. */
 const SHADOW_FULL_AT = 1;
 
 /** Force de l'ombre projetée (0 = invisible, 1 = noire), proportionnelle à l'intensité de l'astre. */
 export function shadowStrength(l: Lighting): number {
-  return SHADOW_MAX * Math.min(1, Math.max(0, l.shadowIntensity / SHADOW_FULL_AT));
+  const k = Math.min(1, Math.max(0, l.shadowIntensity / SHADOW_FULL_AT));
+  // Une lumière faible (lune, soleil voilé) porte une ombre plus légère que sa simple proportion : courbe en k^1,5.
+  return SHADOW_MAX * k * Math.sqrt(k);
 }

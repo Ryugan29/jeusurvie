@@ -27,6 +27,8 @@ import {
   DRY_PATCH_M,
   DRY_STRAY,
   FLUTTER_RAD_S,
+  FOLIAGE_ALBEDO,
+  FOLIAGE_HDR_HEADROOM,
   FLUTTER_SHARE,
   GUST_FLOOR,
   GUST_SPACING_M,
@@ -69,7 +71,8 @@ const MODE: Readonly<Record<FoliageKind, number>> = { flower: 0, grass: 1, plant
 const f = (v: number): string => v.toFixed(4);
 const v3 = (c: Rgb): string => `vec3(${c.map(f).join(', ')})`;
 
-const UNIFORMS = '#ifdef FOLIAGE\nuniform vec4 foliageParams;\nuniform vec4 foliageWind;\nuniform vec4 foliageSun;\nuniform vec4 foliageSunColor;\n#endif\n';
+const UNIFORMS =
+  '#ifdef FOLIAGE\nuniform vec4 foliageParams;\nuniform vec4 foliageWind;\nuniform vec4 foliageSun;\nuniform vec4 foliageSunColor;\nuniform vec4 foliageAlbedo;\n#endif\n';
 
 const VERTEX_DEFINITIONS = `
 #ifdef FOLIAGE
@@ -160,7 +163,7 @@ const FRAGMENT_BEFORE_LIGHTS = `
 const FRAGMENT_BEFORE_FOG = `
 #ifdef FOLIAGE
   float folBack = pow(clamp(dot(-viewDirectionW, foliageSun.xyz), 0.0, 1.0), 5.0);
-  color.rgb += baseColor.rgb * foliageSunColor.rgb * foliageSun.w * (0.1 + 0.9 * folBack) * mix(0.35, 1.0, vFolH);
+  color.rgb += baseColor.rgb / ${f(FOLIAGE_HDR_HEADROOM)} * foliageSunColor.rgb * foliageSun.w * (0.1 + 0.9 * folBack) * mix(0.35, 1.0, vFolH);
 #endif
 `;
 
@@ -173,8 +176,12 @@ const FRAGMENT_BEFORE_FRAGCOLOR = `
 /** Part de la normale ramenée vers le haut, par type de végétation (0 = normale du modèle). */
 const UP_NORMAL: Readonly<Record<FoliageKind, number>> = { grass: 0.85, plant: 0.55, flower: 0.5, tree: 0, pine: 0, bush: 0.3 };
 
+// Albédo réaliste (render-data/foliage → FOLIAGE_ALBEDO) : texture sRGB repassée en linéaire, ramenée vers le gris et à la
+// luminosité d'une vraie feuille ; × la marge de lumière (le matériau léger plafonne l'éclairage à 1, divisé d'autant ailleurs).
 const FRAGMENT_DIFFUSE = `
 #ifdef FOLIAGE
+  baseColor.rgb = toLinearSpace(max(baseColor.rgb, vec3(0.0)));
+  baseColor.rgb = mix(vec3(dot(baseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), baseColor.rgb, foliageAlbedo.x) * foliageAlbedo.y;
   baseColor.rgb *= mix(vec3(1.0), mix(${v3(SHADE_FOOT)}, ${v3(SHADE_TIP)}, smoothstep(0.0, ${f(SHADE_TOP)}, vFolH)), foliageParams.z);
   vec3 folLuma = vec3(0.2126, 0.7152, 0.0722);
   vec3 folToward = vFolTint.rgb * (dot(baseColor.rgb, folLuma) / max(dot(vFolTint.rgb, folLuma), 0.001));
@@ -217,6 +224,7 @@ export class FoliagePlugin extends MaterialPluginBase {
         { name: 'foliageWind', size: 4, type: 'vec4' },
         { name: 'foliageSun', size: 4, type: 'vec4' },
         { name: 'foliageSunColor', size: 4, type: 'vec4' },
+        { name: 'foliageAlbedo', size: 4, type: 'vec4' },
       ],
       vertex: UNIFORMS,
       fragment: UNIFORMS,
@@ -235,6 +243,8 @@ export class FoliagePlugin extends MaterialPluginBase {
       uniformBuffer.updateFloat4('foliageSun', 0, 1, 0, 0);
       uniformBuffer.updateFloat4('foliageSunColor', 0, 0, 0, 0);
     }
+    const albedo = FOLIAGE_ALBEDO[p.kind];
+    uniformBuffer.updateFloat4('foliageAlbedo', albedo.saturation, albedo.value * FOLIAGE_HDR_HEADROOM, 0, 0);
     if (engine) setAlphaToCoverage(engine, true);
   }
 

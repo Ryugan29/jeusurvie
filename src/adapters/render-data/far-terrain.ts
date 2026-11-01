@@ -45,9 +45,9 @@ export interface FarTerrainResult {
 }
 
 /** Feuillage vu de loin : vert profond des feuillus, bleu-vert des pins (froid), or des groupes d'automne. */
-export const CANOPY: Rgb = [0.2, 0.36, 0.1];
-const PINE_CANOPY: Rgb = [0.14, 0.3, 0.22];
-const AUTUMN_CANOPY: Rgb = [0.72, 0.42, 0.1];
+export const CANOPY: Rgb = [0.16, 0.24, 0.09];
+const PINE_CANOPY: Rgb = [0.11, 0.19, 0.14];
+const AUTUMN_CANOPY: Rgb = [0.5, 0.32, 0.11];
 /** Densité forestière (forestFactorAt) où la canopée commence à se voir, et où elle couvre tout. */
 const CANOPY_FROM = 0.5, CANOPY_FULL = 1.8;
 /** Part maximale de canopée (même un bosquet dense laisse voir un peu de sol entre les cimes). */

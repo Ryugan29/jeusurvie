@@ -69,7 +69,7 @@ describe('SceneLighting (ambiance appliquée à la scène, vrai moteur sans cart
   });
 
   it('le ciel est un dôme peint (nuages actifs par défaut) ; l’option les coupe', () => {
-    expect(new SceneLighting(scene, OPTIONS).sky.cloudsEnabled).toBe(true);
-    expect(new SceneLighting(scene, { ...OPTIONS, clouds: false }).sky.cloudsEnabled).toBe(false);
+    expect(new SceneLighting(scene, OPTIONS).sky.cloudQuality).toBe('layered');
+    expect(new SceneLighting(scene, { ...OPTIONS, clouds: 'flat' }).sky.cloudQuality).toBe('flat');
   });
 });

@@ -147,14 +147,19 @@ describe('lightingFor (ambiances jour / crépuscule / nuit)', () => {
 });
 
 describe('ciel et lumière « fantasy colorée » (aperçus du pack Quaternius)', () => {
-  it('midi : bleu vif au zénith, cyan clair à l’horizon (plus clair en bas qu’en haut)', () => {
+  it('midi : ciel de diffusion — zénith bleu franc, horizon blanc-bleuté plus clair et moins saturé (ADR 0012)', () => {
     const noon = at(0.3);
-    expect(noon.skyZenith[2]).toBeGreaterThan(0.9);
-    expect(saturation(noon.skyZenith)).toBeGreaterThan(0.6);
+    const [zr, zg, zb] = noon.skyZenith;
+    expect(zb).toBeGreaterThan(zg);
+    expect(zg).toBeGreaterThan(zr);
+    expect(zb).toBeGreaterThan(0.7);
+    expect(saturation(noon.skyZenith)).toBeGreaterThan(0.5);
+    expect(saturation(noon.skyZenith)).toBeLessThan(0.85); // pas le cyan saturé d'une illustration
     const [r, g, b] = noon.skyHorizon;
-    expect(b).toBeGreaterThan(r + 0.3);
-    expect(g).toBeGreaterThan(r + 0.15);
+    expect(b).toBeGreaterThan(r + 0.2);
+    expect(g).toBeGreaterThan(r + 0.08);
     expect(luminance(noon.skyHorizon)).toBeGreaterThan(luminance(noon.skyZenith));
+    expect(saturation(noon.skyHorizon)).toBeLessThan(saturation(noon.skyZenith));
   });
 
   it('crépuscule doré, jamais rose : soleil, horizon et brume en orange (rouge > vert > bleu), le vert reste fort', () => {

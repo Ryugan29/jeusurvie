@@ -4,6 +4,7 @@ import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CHUNK_SIZE } from '../../core/world/chunk';
+import { viewSectorFor } from '../render-data/view-sector';
 import { VegetationRenderer } from './vegetation-renderer';
 
 /** Lot de n instances dont la 1re translation (x) vaut `x0` : de quoi reconnaître l'ordre. */
@@ -89,6 +90,20 @@ describe('VegetationRenderer (vrai moteur Babylon sans carte graphique)', () => 
     const r2 = renderer.revision;
     renderer.remove('absent');
     expect(renderer.revision).toBe(r2);
+  });
+
+  it('élagage par secteur de vue : les chunks derrière la caméra ne sont pas dessinés, ceux devant et tout près le sont', () => {
+    const { tree, renderer } = setup();
+    renderer.add('0,3', 0, 3, { CommonTree_3: batch(2) }); // devant (+z)
+    renderer.add('0,-4', 0, -4, { CommonTree_3: batch(5) }); // derrière, loin
+    renderer.add('0,0', 0, 0, { CommonTree_3: batch(1) }); // sous le joueur
+    const forward = { sector: viewSectorFor(0, 1, 16 / 9), x: 32, z: 32 };
+    renderer.update(32, 32, forward);
+    expect(tree.thinInstanceCount).toBe(3);
+    renderer.update(32, 32, { ...forward, sector: viewSectorFor(Math.PI, 1, 16 / 9) }); // demi-tour
+    expect(tree.thinInstanceCount).toBe(6);
+    renderer.update(32, 32); // sans élagage : tout ce qui est à portée
+    expect(tree.thinInstanceCount).toBe(8);
   });
 
   it('un modèle absent de la bibliothèque est ignoré sans erreur', () => {

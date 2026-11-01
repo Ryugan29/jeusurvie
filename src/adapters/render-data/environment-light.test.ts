@@ -228,14 +228,14 @@ describe('iblIntensityFor (le reflet du ciel suit la lumière réelle de la scè
   });
 
   it('change doucement le long du cycle : aucun saut d’une image à l’autre, par aucun temps', () => {
-    // Un saut (une marche dans le calcul) serait de l'ordre de 0,3. La pente la plus raide, mesurée : 0,049 pour 0,002 du cycle (2,4 s de
-    // jeu), vers 0,89 : la lune basse se couche, le reflet passe de 1 à 0,2 en une minute de jeu, pour suivre un sol qui s'assombrit.
+    // Un saut (une marche dans le calcul) serait de l'ordre de 0,3. La pente la plus raide, mesurée : 0,061 pour 0,002 du cycle (2,4 s de
+    // jeu), vers 0,8 avec le ciel de nuit réaliste (ADR 0012) : la lune basse, le reflet suit un sol qui s'assombrit.
     const step = 0.002;
     for (const kind of WEATHER_KINDS) {
       let previous = iblIntensityFor(sceneLight(0, kind));
       for (let hour = step; hour < 1; hour += step) {
         const value = iblIntensityFor(sceneLight(hour, kind));
-        expect(Math.abs(value - previous), `${kind} à ${hour.toFixed(3)}`).toBeLessThan(0.06);
+        expect(Math.abs(value - previous), `${kind} à ${hour.toFixed(3)}`).toBeLessThan(0.08);
         previous = value;
       }
     }

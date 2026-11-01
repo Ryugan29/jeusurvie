@@ -27,6 +27,8 @@
 
 - 2026-11-01 — Pluie réaliste (gouttes sur l'écran, nuages de pluie, reflets, flaques) et ciel fantastique : étoiles, voie lactée, étoiles filantes, planète géante, aurores (José : « Planète + aurores », gouttes toujours sous la pluie) — docs/adr/0011
 
+- 2026-11-01 — Nouvelle identité visuelle réaliste (fin du « stylisé coloré » de l'ADR 0009) et quatre profils graphiques LOW / MEDIUM / HIGH / ULTRA, choisis dans Réglages → Graphismes, appliqués à chaud et enregistrés (José : « transformation graphique complète, objectif photoréalisme ») — docs/adr/0012
+
 ## Questions ouvertes (qui doit répondre)
 - Machine de référence pour la fluidité (« PC moyen ») — superviseur, pendant le spike
 - Modèles 3D animés libres de droits disponibles (fixe le bestiaire) — superviseur, pendant le spike
@@ -36,6 +38,9 @@
 - Politique `genVersion` après publication — superviseur, avant la première sortie
 - Signature du .exe (« éditeur inconnu » ou certificat payant) — José, en phase déploiement
 - Hébergement itch.io et mise sur GitHub — José, en phase déploiement
+
+- Textures photographiques et modèles photogrammétriques CC0 (arbres, rochers) pour aller plus loin vers le photoréalisme : quelle source, quel budget de poids — José
+- Profil par défaut au premier lancement (HIGH aujourd'hui) et détection automatique selon la carte graphique — José, après mesure sur sa machine
 
 ## Prochaine étape
 Test « beau et fluide » : la scène 3D tourne (terrain, relief, biomes, végétation, lumière jour/crépuscule/nuit, brume, ombre).
@@ -72,3 +77,10 @@ Non vérifié : la fluidité sur la machine de José (pluie = particules process
 Pluie et ciel (2026-11-01, suite, demande de José) : gouttes sur l'objectif (?gouttes=0), nuages de pluie bas et ardoise, sol qui reflète le ciel,
 flaques à ronds de pluie, roches/troncs/personnages luisants ; la nuit : étoiles en 3 couches qui rayonnent, voie lactée, étoiles filantes, lune à mers ;
 planète géante toujours visible (10° à 30°), pâle le jour ; aurores chaque nuit dégagée — ADR 0011. Fluidité mesurée sur la machine de José : ~90-98 images/s.
+Refonte réaliste et profils graphiques (2026-11-01, ADR 0012) : sol physique à matières générées sur la carte graphique (herbe couchée,
+terre à cailloux, roche à lichens, neige ridée), palette et lumière réalistes, végétation repassée en albédo réel, ciel à diffusion de Mie
+et nuages en couches ou en volume (ULTRA), perspective atmosphérique en passe d'image, ombres PCSS (ULTRA), reflets à l'écran sur sol
+mouillé (HIGH, ULTRA), profondeur de champ et flou de mouvement (ULTRA), élagage de la végétation hors du champ. Réglages → Graphismes
+(pause ou touche O) : LOW / MEDIUM / HIGH / ULTRA, description, application immédiate, enregistrement, « Rétablir par défaut ».
+Vérifié à l'écran dans le navigateur automatique (rendu logiciel, sans carte graphique) ; NON vérifié : la fluidité réelle de chaque profil
+sur la machine de José (panneau F, ligne « GPU … ms »).

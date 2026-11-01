@@ -37,6 +37,7 @@ export class ShadowProxies {
   private lastX = Number.NaN;
   private lastZ = Number.NaN;
   private lastRevision = -1;
+  private radiusM: number;
 
   /** @param onProxy appelé une fois pour chaque double : c'est là qu'on l'ajoute aux projeteurs d'ombre. */
   constructor(
@@ -46,6 +47,7 @@ export class ShadowProxies {
     private readonly options: ShadowProxiesOptions,
     onProxy: (proxy: Mesh) => void,
   ) {
+    this.radiusM = options.radiusM;
     for (const model of models) {
       for (const part of library.partsOf(model)) {
         const mesh = part.clone(`ombre ${part.name}`, null, true);
@@ -58,6 +60,13 @@ export class ShadowProxies {
         onProxy(mesh);
       }
     }
+  }
+
+  /** Nouveau rayon (m) des doubles (portée des ombres du profil graphique) : refaits à la prochaine mise à jour. */
+  setRadius(radiusM: number): void {
+    if (!(Number.isFinite(radiusM) && radiusM > 0) || radiusM === this.radiusM) return;
+    this.radiusM = radiusM;
+    this.lastRevision = -1;
   }
 
   isProxy(mesh: unknown): boolean {
@@ -75,7 +84,7 @@ export class ShadowProxies {
     for (const { model, mesh } of this.proxies) {
       let instances = byModel.get(model);
       if (instances === undefined) {
-        instances = this.source.nearInstances(model, playerX, playerZ, this.options.radiusM);
+        instances = this.source.nearInstances(model, playerX, playerZ, this.radiusM);
         byModel.set(model, instances);
       }
       if (instances.length === 0) {

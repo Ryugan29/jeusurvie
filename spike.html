@@ -15,9 +15,14 @@
       <p id="info"></p>
       <p id="cover"></p>
       <p id="seed"></p>
-      <p class="keys">1 matin · 2 midi · 3 crépuscule · 4 nuit · 5 cycle ×60 · 6 météo · Maj marcher · F masquer · Échap pause</p>
+      <p class="keys">1 matin · 2 midi · 3 crépuscule · 4 nuit · 5 cycle ×60 · 6 météo · O réglages graphiques · Maj marcher · F masquer · Échap pause</p>
     </div>
-    <div id="overlay"><p id="overlay-text">Cliquer pour jouer</p></div>
+    <div id="overlay">
+      <div class="overlay-actions">
+        <p id="overlay-text">Cliquer pour jouer</p>
+        <button id="open-graphics" class="overlay-bouton" type="button">Réglages graphiques</button>
+      </div>
+    </div>
     <script type="module" src="/src/spike/scene-main.ts"></script>
   </body>
 </html>

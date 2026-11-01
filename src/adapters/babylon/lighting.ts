@@ -11,6 +11,8 @@ import { distanceFogVisibilityFor, fogDensityFor, hazeColor, heightFogFor } from
 import { distanceFogDensity, type Atmosphere } from '../render-data/atmosphere';
 import { cosmosFor } from '../render-data/cosmos';
 import type { Rgb } from '../render-data/palette';
+import type { CloudQuality } from '../render-data/quality';
+import type { AerialState } from './atmosphere-pass';
 import { HeightFogPlugin } from './height-fog-plugin';
 import { SkyDome } from './sky-dome';
 
@@ -26,8 +28,8 @@ export interface SceneLightingOptions {
   readonly heightFogBaseY: number;
   /** Nombre de segments de la sphère du ciel (résolution du dégradé). */
   readonly domeSegments: number;
-  /** Nuages peints dans le ciel (défaut : oui). */
-  readonly clouds?: boolean;
+  /** Qualité des nuages (défaut : en couches) : render-data/quality → sky.clouds. */
+  readonly clouds?: CloudQuality;
   /**
    * Distance (m) de référence de la brume de distance, quand le monde dessiné va plus loin que les chunks (relief lointain) :
    * la visibilité de l'heure y est atteinte. Défaut : fogDistanceFraction × viewRadiusM.
@@ -36,6 +38,15 @@ export interface SceneLightingOptions {
   /** Rayon (m) du dôme de ciel : au-delà de tout ce qui est dessiné (défaut : 1,2 × viewRadiusM). */
   readonly skyRadiusM?: number;
 }
+
+/** Part de la lumière de l'astre que l'air diffuse vers l'œil (multipliée par la phase de Mie : halo autour de l'astre dans la brume). */
+export const AERIAL_SUN_SCATTER = 0.09;
+/**
+ * Part de la brume de hauteur de l'heure gardée par la perspective atmosphérique. Les densités de render-data/fog ont été réglées
+ * pour le seul SOL (la brume des matériaux ne touchait pas la végétation) ; la passe d'image embrume tout — arbres, rochers,
+ * personnages —, à pleine densité les arbres à 100 m pâlissaient déjà à midi. Les vallées restent embrumées le matin et le soir.
+ */
+export const AERIAL_HEIGHT_FOG_SHARE = 0.5;
 
 const setRgb = (target: Color3, c: Rgb): void => {
   target.set(c[0], c[1], c[2]);
@@ -50,12 +61,27 @@ export class SceneLighting {
   /** Temps réel écoulé (s) : fait dériver les nuages, indépendant de l'heure du jeu (cycle accéléré compris). */
   private elapsedS = 0;
   private readonly clearColor = new Color4(0, 0, 0, 1);
-  private readonly heightFogs: HeightFogPlugin[] = [];
+  private readonly heightFogs = new Map<Material, HeightFogPlugin>();
+  /** Perspective atmosphérique en passe d'image (atmosphere-pass) : la brume des matériaux est alors coupée. */
+  private aerial = false;
+  /** Distance (m) de référence de la brume de distance (setDistances). */
+  private fogDistanceM: number;
+  /** L'air de l'image courante, pour la perspective atmosphérique (relu par la passe d'image). */
+  private air: AerialState = {
+    distanceDensity: 0,
+    heightDensity: 0,
+    heightThicknessM: 1,
+    heightBaseY: 0,
+    haze: [0.6, 0.7, 0.8],
+    sunDirection: { x: 0, y: -1, z: 0 },
+    sunScatter: [0, 0, 0],
+  };
 
   constructor(
     private readonly scene: Scene,
     private readonly options: SceneLightingOptions,
   ) {
+    this.fogDistanceM = options.fogDistanceM ?? options.viewRadiusM * options.fogDistanceFraction;
     this.ambient = new HemisphericLight('ambiance', new Vector3(0, 1, 0), scene);
     this.ambient.specular = Color3.Black();
     this.sun = new DirectionalLight('soleil', new Vector3(0, -1, 0), scene);
@@ -67,12 +93,49 @@ export class SceneLighting {
     scene.clearColor = this.clearColor;
 
     // Dôme de ciel : sphère vue de l'intérieur, qui suit la caméra, sans éclairage ni brume.
-    this.sky = new SkyDome(scene, { radiusM: options.skyRadiusM ?? options.viewRadiusM * 1.2, segments: options.domeSegments, clouds: options.clouds ?? true });
+    this.sky = new SkyDome(scene, { radiusM: options.skyRadiusM ?? options.viewRadiusM * 1.2, segments: options.domeSegments, clouds: options.clouds ?? 'layered' });
   }
 
   /** Ajoute la brume de hauteur à un matériau (le terrain). */
   addHeightFog(material: Material): void {
-    this.heightFogs.push(new HeightFogPlugin(material));
+    if (!this.heightFogs.has(material)) this.heightFogs.set(material, new HeightFogPlugin(material));
+  }
+
+  /** Oublie la brume de hauteur d'un matériau retiré (relief lointain recréé par un changement de profil). */
+  removeHeightFog(material: Material): void {
+    this.heightFogs.delete(material);
+  }
+
+  /**
+   * Perspective atmosphérique en passe d'image (profils MEDIUM et plus) : la brume de distance et de hauteur des matériaux est
+   * coupée (la passe les calcule pour tous les pixels, avec la diffusion de l'astre). Sans elle (LOW) : brume des matériaux.
+   */
+  setAerialPerspective(enabled: boolean): void {
+    this.aerial = enabled;
+    this.scene.fogMode = enabled ? Scene.FOGMODE_NONE : Scene.FOGMODE_EXP;
+  }
+
+  get aerialPerspective(): boolean {
+    return this.aerial;
+  }
+
+  /**
+   * Distances du profil graphique : distance (m) où la visibilité de l'heure est atteinte (le monde dessiné le plus loin) et rayon
+   * (m) du dôme de ciel (au-delà de tout ce qui est dessiné, en deçà du plan lointain de la caméra).
+   */
+  setDistances(fogDistanceM: number, skyRadiusM: number): void {
+    this.fogDistanceM = fogDistanceM;
+    this.sky.setRadius(skyRadiusM);
+  }
+
+  /** Qualité des nuages (profil graphique). */
+  setCloudQuality(clouds: CloudQuality): void {
+    this.sky.setCloudQuality(clouds);
+  }
+
+  /** L'air de l'image courante (densités, couleur de brume, diffusion de l'astre) : pour la passe de perspective atmosphérique. */
+  get aerialState(): AerialState {
+    return this.air;
   }
 
   /** `frameS` : durée de l'image (s), pour la dérive des nuages. */
@@ -83,12 +146,24 @@ export class SceneLighting {
     this.clearColor.set(haze[0], haze[1], haze[2], 1);
     setRgb(this.scene.fogColor, haze);
     // Brume de l'heure (réglée sur la distance de référence), épaissie par la pluie, plus celle du brouillard (render-data/atmosphere).
-    this.scene.fogDensity = distanceFogDensity(
+    const fogDensity = distanceFogDensity(
       a,
-      fogDensityFor(this.options.fogDistanceM ?? this.options.viewRadiusM * this.options.fogDistanceFraction, distanceFogVisibilityFor(time)),
+      fogDensityFor(this.fogDistanceM, distanceFogVisibilityFor(time)),
     );
+    this.scene.fogDensity = fogDensity;
     const heightFog = heightFogFor(time);
-    for (const plugin of this.heightFogs) plugin.set(heightFog, this.options.heightFogBaseY, haze);
+    // Avec la perspective atmosphérique, la brume de hauteur est calculée dans la passe d'image (pour tous les pixels).
+    const materialHeightFog = this.aerial ? { density: 0, thickness: heightFog.thickness } : heightFog;
+    for (const plugin of this.heightFogs.values()) plugin.set(materialHeightFog, this.options.heightFogBaseY, haze);
+    this.air = {
+      distanceDensity: fogDensity,
+      heightDensity: heightFog.density * AERIAL_HEIGHT_FOG_SHARE,
+      heightThicknessM: heightFog.thickness,
+      heightBaseY: this.options.heightFogBaseY,
+      haze,
+      sunDirection: l.sunDirection,
+      sunScatter: [l.sunColor[0] * l.sunIntensity * AERIAL_SUN_SCATTER, l.sunColor[1] * l.sunIntensity * AERIAL_SUN_SCATTER, l.sunColor[2] * l.sunIntensity * AERIAL_SUN_SCATTER],
+    };
     setRgb(this.ambient.diffuse, l.ambientColor);
     setRgb(this.ambient.groundColor, l.ambientGroundColor);
     this.ambient.intensity = l.ambientIntensity;

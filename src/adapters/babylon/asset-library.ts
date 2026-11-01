@@ -10,7 +10,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { foliageProfileFor } from '../render-data/foliage';
+import { FOLIAGE_HDR_HEADROOM, foliageProfileFor } from '../render-data/foliage';
 import { normalMapFor, type NormalMap } from '../render-data/normal-maps';
 import { FOLIAGE_MATERIAL, isFoliageMaterial, surfaceFor } from '../render-data/surfaces';
 import { FoliagePlugin, type WindState } from './foliage-plugin';
@@ -28,10 +28,15 @@ import { FoliagePlugin, type WindState } from './foliage-plugin';
 const SELF_LIGHT = 0.1;
 /** Feuillages, herbes, plantes et fleurs : le soleil les traverse (un peu plus d'auto-éclairage) et leur vert olive tire vers le jaune-vert. */
 const FOLIAGE = FOLIAGE_MATERIAL;
-// Faible : la normale des brins et des feuilles est ramenée vers le haut (foliage-plugin), ils prennent déjà la lumière du sol ; plus
-// fort, l'herbe restait vert vif au crépuscule et la nuit, comme éclairée de l'intérieur.
-const FOLIAGE_SELF_LIGHT = new Color3(0.06, 0.07, 0.04);
-const FOLIAGE_TINT = new Color3(1.15, 1.2, 0.95);
+// Presque nulle (ADR 0012) : la lumière diffusée à travers le feuillage (foliage-plugin) et le ciel éclairent déjà l'ombre ; plus
+// forte, l'herbe restait claire au crépuscule et la nuit, comme éclairée de l'intérieur. Divisée par la marge de lumière (le shader
+// multiplie la couleur d'autant).
+const FOLIAGE_SELF_LIGHT = new Color3(0.02, 0.024, 0.014).scale(1 / FOLIAGE_HDR_HEADROOM);
+/** Lumière reçue par la végétation, divisée par la marge (render-data/foliage → FOLIAGE_HDR_HEADROOM). */
+const FOLIAGE_TINT = new Color3(1, 1, 1).scale(1 / FOLIAGE_HDR_HEADROOM);
+/** Reflet cireux des feuilles et des brins : faible, large (une cuticule, pas un vernis). */
+const FOLIAGE_SPECULAR = new Color3(0.045, 0.05, 0.04);
+const FOLIAGE_GLOSSINESS = 18;
 
 /** Matériaux des petites plantes du pack (herbe « Grass », plantes, trèfles, fougères « Leaves ») : pas les feuillages d'arbres. */
 const GROUND_PLANTS = /^(grass|leaves)$/i;
@@ -71,7 +76,8 @@ export function toStandard(pbr: PBRMaterial, scene: Scene, loadNormalMap?: Norma
   material.diffuseColor = foliage ? pbr.albedoColor.multiply(FOLIAGE_TINT) : pbr.albedoColor.clone();
   material.diffuseTexture = pbr.albedoTexture;
   material.emissiveColor = foliage ? FOLIAGE_SELF_LIGHT.clone() : new Color3(SELF_LIGHT, SELF_LIGHT, SELF_LIGHT);
-  material.specularColor = Color3.Black();
+  material.specularColor = foliage ? FOLIAGE_SPECULAR.clone() : Color3.Black();
+  material.specularPower = FOLIAGE_GLOSSINESS;
   material.backFaceCulling = pbr.backFaceCulling;
   material.twoSidedLighting = pbr.twoSidedLighting;
   material.transparencyMode = pbr.transparencyMode;

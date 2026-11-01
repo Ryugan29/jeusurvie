@@ -4,7 +4,19 @@
 // instances s'y rattache — le dernier chunk chargé effaçait celui des autres (test de régression).
 // Portée d'affichage par type : render-data/vegetation-instances → vegetationRangeM, au chunk près.
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { CHUNK_SIZE } from '../../core/world/chunk';
 import { concatInstances, instancesWithin, vegetationRangeM, vegetationVisible, type VegetationBatches } from '../render-data/vegetation-instances';
+import { inSector, type ViewSector } from '../render-data/view-sector';
+
+/** Ce que voit la caméra : son secteur horizontal et sa position (sommet du secteur). */
+export interface CameraView {
+  readonly sector: ViewSector;
+  readonly x: number;
+  readonly z: number;
+}
+
+/** Rayon (m) d'un chunk vu du dessus (demi-diagonale) + la couronne d'un grand arbre qui déborde du chunk. */
+const CHUNK_VIEW_RADIUS_M = (CHUNK_SIZE * Math.SQRT2) / 2 + 6;
 
 /** Ce que le rendu demande à la bibliothèque de modèles (AssetLibrary, ou un faux pour les tests). */
 export interface ModelParts {
@@ -31,6 +43,8 @@ export class VegetationRenderer {
 
   /** Change à chaque chunk ajouté ou retiré : de quoi savoir qu'une liste dérivée (les ombres proches) est à refaire. */
   private revisionCount = 0;
+  /** Multiplie la portée d'affichage de chaque type (profil graphique : render-data/quality → distances.vegetationRange). */
+  private rangeScale = 1;
 
   constructor(private readonly library: ModelParts) {}
 
@@ -40,6 +54,11 @@ export class VegetationRenderer {
 
   get revision(): number {
     return this.revisionCount;
+  }
+
+  /** Portées d'affichage × k (profil graphique) : prise en compte à la prochaine mise à jour. */
+  setRangeScale(k: number): void {
+    this.rangeScale = Number.isFinite(k) && k > 0 ? k : 1;
   }
 
   /**
@@ -75,11 +94,18 @@ export class VegetationRenderer {
     this.chunks.delete(key);
   }
 
-  /** Met à jour ce qui est dessiné selon la position du joueur (appelé à chaque image : ne refait que ce qui a changé). */
-  update(playerX: number, playerZ: number): void {
+  /**
+   * Met à jour ce qui est dessiné selon la position du joueur (appelé à chaque image : ne refait que ce qui a changé). `view` : le
+   * chunk entièrement hors du champ de la caméra n'est pas dessiné (ses arbres ne coûtent plus rien à la carte graphique) ; le
+   * secteur de vue est arrondi par pas (render-data/view-sector) : les tampons ne sont refaits qu'au pas franchi.
+   */
+  update(playerX: number, playerZ: number, view?: CameraView): void {
     for (const chunk of this.chunks.values()) {
+      const inView =
+        view === undefined ||
+        inSector(view.sector, view.x, view.z, (chunk.cx + 0.5) * CHUNK_SIZE, (chunk.cz + 0.5) * CHUNK_SIZE, CHUNK_VIEW_RADIUS_M);
       for (const [model, batch] of chunk.batches) {
-        const visible = vegetationVisible(chunk.cx, chunk.cz, playerX, playerZ, batch.rangeM);
+        const visible = inView && vegetationVisible(chunk.cx, chunk.cz, playerX, playerZ, batch.rangeM * this.rangeScale);
         if (visible === batch.shown) continue;
         batch.shown = visible;
         this.dirty.add(model);

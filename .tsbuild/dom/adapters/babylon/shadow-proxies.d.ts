@@ -20,8 +20,11 @@ export declare class ShadowProxies {
     private lastX;
     private lastZ;
     private lastRevision;
+    private radiusM;
     /** @param onProxy appelé une fois pour chaque double : c'est là qu'on l'ajoute aux projeteurs d'ombre. */
     constructor(library: ModelParts, source: NearInstances, models: readonly string[], options: ShadowProxiesOptions, onProxy: (proxy: Mesh) => void);
+    /** Nouveau rayon (m) des doubles (portée des ombres du profil graphique) : refaits à la prochaine mise à jour. */
+    setRadius(radiusM: number): void;
     isProxy(mesh: unknown): boolean;
     /** À appeler à chaque image avec la position du joueur : ne refait les instances que si c'est nécessaire. */
     update(playerX: number, playerZ: number): void;

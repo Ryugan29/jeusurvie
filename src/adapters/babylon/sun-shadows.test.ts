@@ -14,7 +14,7 @@ import { SunShadows } from './sun-shadows';
 
 const CYCLE_S = DAY_LENGTH_S + NIGHT_LENGTH_S;
 const at = (fraction: number): Lighting => lightingFor(timeOfDay(fraction * CYCLE_S));
-const OPTIONS = { cascades: 3, mapSize: 1024, rangeM: 90 } as const;
+const OPTIONS = { cascades: 3, mapSize: 1024, rangeM: 90, filter: 'pcf-medium' } as const;
 
 describe('SunShadows (ombres en cascade du soleil, vrai moteur sans carte graphique)', () => {
   let engine: NullEngine, scene: Scene, camera: FreeCamera, sun: DirectionalLight;
@@ -49,6 +49,18 @@ describe('SunShadows (ombres en cascade du soleil, vrai moteur sans carte graphi
     expect(generator.usePercentageCloserFiltering).toBe(true);
     expect(generator.filteringQuality).toBeGreaterThanOrEqual(ShadowGenerator.QUALITY_MEDIUM);
     expect(generator.stabilizeCascades).toBe(true);
+  });
+
+  it('filtrage selon le profil : PCF de plus en plus large, puis pénombre réaliste (PCSS) en ULTRA', () => {
+    const low = new SunShadows(sun, camera, { ...OPTIONS, filter: 'pcf-low' }).generator;
+    expect(low.usePercentageCloserFiltering).toBe(true);
+    expect(low.filteringQuality).toBe(ShadowGenerator.QUALITY_LOW);
+    const high = new SunShadows(new DirectionalLight('b', new Vector3(0, -1, 0), scene), camera, { ...OPTIONS, filter: 'pcf-high' }).generator;
+    expect(high.filteringQuality).toBe(ShadowGenerator.QUALITY_HIGH);
+    const pcss = new SunShadows(new DirectionalLight('c', new Vector3(0, -1, 0), scene), camera, { ...OPTIONS, filter: 'pcss' }).generator;
+    expect(pcss.useContactHardeningShadow).toBe(true);
+    expect(pcss.contactHardeningLightSizeUVRatio).toBeGreaterThan(0);
+    expect(pcss.contactHardeningLightSizeUVRatio).toBeLessThan(0.1); // un soleil net, pas une lampe diffuse
   });
 
   it('addCaster : le maillage projette une ombre, une seule fois même si on l’ajoute deux fois', () => {

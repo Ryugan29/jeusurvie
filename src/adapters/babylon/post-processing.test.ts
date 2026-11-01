@@ -62,7 +62,7 @@ describe('createPostProcessing (effets d’image, vrai moteur sans carte graphiq
     expect(SKY_SUN_DISC_HDR * luminance(noon.sunColor)).toBeGreaterThan(COLOR_GRADE.bloomThreshold * 2);
   });
 
-  it('couleurs vives et contrastées, sans écraser les teintes', () => {
+  it('développement réaliste : tone mapping, contraste léger, saturation de pellicule (ADR 0012)', () => {
     const pipeline = createPostProcessing(scene, camera);
     const ip = pipeline.imageProcessing!;
     expect(pipeline.imageProcessingEnabled).toBe(true);
@@ -71,10 +71,27 @@ describe('createPostProcessing (effets d’image, vrai moteur sans carte graphiq
     expect(ip.exposure).toBeCloseTo(COLOR_GRADE.exposure, 6);
     expect(ip.colorCurvesEnabled).toBe(true);
     expect(ip.colorCurves!.globalSaturation).toBeCloseTo(COLOR_GRADE.saturation, 6);
-    expect(COLOR_GRADE.saturation).toBeGreaterThan(0);
+    expect(COLOR_GRADE.saturation).toBeGreaterThanOrEqual(0);
+    expect(COLOR_GRADE.saturation).toBeLessThanOrEqual(12); // une pellicule, pas une illustration (+20 avant l'ADR 0012)
+    expect(COLOR_GRADE.contrast).toBeGreaterThanOrEqual(1);
+    expect(COLOR_GRADE.vignetteWeight).toBeLessThan(1); // vignettage d'objectif, pas un cadre d'illustration
   });
 
-  it('harmonie des aperçus : saturation et contraste modérés (le vert saturé écrasait les tons jaunes et ocre)', () => {
+  it('effets du profil graphique : halo, FXAA, netteté et grain suivent le profil ; 0 les coupe', () => {
+    const off = createPostProcessing(scene, camera, { post: { bloomKernel: 0, grain: 0, sharpen: 0 }, fxaa: false });
+    expect(off.bloomEnabled).toBe(false);
+    expect(off.grainEnabled).toBe(false);
+    expect(off.sharpenEnabled).toBe(false);
+    expect(off.fxaaEnabled).toBe(false);
+    const on = createPostProcessing(scene, camera, { post: { bloomKernel: 96, grain: 5, sharpen: 0.12 }, fxaa: true });
+    expect(on.bloomEnabled).toBe(true);
+    expect(on.bloomKernel).toBe(96);
+    expect(on.grain.intensity).toBe(5);
+    expect(on.sharpen.edgeAmount).toBeCloseTo(0.12, 6);
+    expect(on.fxaaEnabled).toBe(true);
+  });
+
+  it('saturation et contraste modérés, alignés sur l’étalonnage de jour', () => {
     expect(COLOR_GRADE.saturation).toBeLessThanOrEqual(20);
     expect(COLOR_GRADE.contrast).toBeLessThanOrEqual(1.15);
     expect(COLOR_GRADE.exposure).toBe(DAY_GRADE.exposure);

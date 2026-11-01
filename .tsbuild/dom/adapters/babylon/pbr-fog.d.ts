@@ -5,12 +5,12 @@ import '@babylonjs/core/Shaders/ShadersInclude/fogFragment';
  */
 export declare const BABYLON_FOG_FRAGMENT = "#ifdef FOG\nfloat fog=CalcFogFactor();\n#ifdef PBR\nfog=toLinearSpace(fog);\n#endif\ncolor.rgb=mix(vFogColor,color.rgb,fog);\n#endif\n";
 /**
- * Remplaçant : seule la branche PBR change ; la ligne standard (`color.rgb=mix(vFogColor,color.rgb,fog);`) est celle de Babylon, mot
- * pour mot, et ne s'exécute plus que hors PBR.
+ * Remplaçant (ADR 0012 : tout est linéaire) : le PBR prend la ligne du standard, mot pour mot — brume linéaire, visibilité non
+ * convertie. La conversion `toLinearSpace(fog)` de Babylon (brume bien plus épaisse sur le PBR) disparaît.
  * Attention : Babylon appelle cet include avec `(color,finalColor)` pour le PBR, ce qui remplace TOUT « color » en minuscules par
  * « finalColor » — d'où l'absence de ce mot ailleurs que dans `color.rgb` (« vFogColor », avec une majuscule, n'est pas touché).
  */
-export declare const PBR_FOG_FRAGMENT = "#ifdef FOG\nfloat fog=CalcFogFactor();\n#ifdef PBR\ncolor.rgb=toLinearSpace(mix(vFogColor,toGammaSpace(color.rgb),fog));\n#else\ncolor.rgb=mix(vFogColor,color.rgb,fog);\n#endif\n#endif\n";
+export declare const PBR_FOG_FRAGMENT = "#ifdef FOG\nfloat fog=CalcFogFactor();\ncolor.rgb=mix(vFogColor,color.rgb,fog);\n#endif\n";
 /**
  * - patched : include reconnu et remplacé ;
  * - already-patched : déjà remplacé (rechargement à chaud du code en développement, deuxième appel) ;

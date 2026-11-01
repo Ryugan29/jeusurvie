@@ -1,12 +1,12 @@
-// Brume des matériaux PBR (héroïne, démon, roches, écorces…) alignée sur celle des matériaux standard (herbe, sol, terrain).
-// Le défaut : dans l'include « fogFragment » de Babylon, la branche `#ifdef PBR` élève la visibilité à la puissance 2,2 et mélange
-// la brume (valeur « gamma » de scene.fogColor) à une couleur LINÉAIRE sans la convertir. Le PBR est alors bien plus embrumé et
-// bien plus clair que le standard à la même distance : en brouillard, des silhouettes blanc-lavande devant une herbe qui garde ses
-// couleurs. Le standard, lui, mélange en gamma puis laisse l'étalonnage (post-traitement) passer en linéaire.
-// La formule corrigée (render-data/fog-blend.ts, testée là-bas : mêmes pixels que le standard, HDR compris) :
-//   color.rgb = toLinearSpace(mix(vFogColor, toGammaSpace(color.rgb), fog))     avec `fog` NON converti.
+// Brume des matériaux PBR (sol, relief lointain, héroïne, démon, roches, écorces…) alignée sur celle des matériaux standard
+// (végétation) — profil LOW, où la brume est calculée dans les matériaux (les autres profils : passe d'image, atmosphere-pass).
+// Le défaut : dans l'include « fogFragment » de Babylon, la branche `#ifdef PBR` élève la visibilité à la puissance 2,2 : le PBR est
+// bien plus embrumé que le standard à la même distance (en brouillard, des silhouettes blanc-lavande devant une herbe qui garde ses
+// couleurs). Depuis l'ADR 0012 tout est en lumière linéaire (végétation comprise) : la formule corrigée est simplement celle du
+// standard (render-data/fog-blend.ts, testée là-bas) :
+//   color.rgb = mix(vFogColor, color.rgb, fog)     avec `fog` NON converti, brume linéaire comme l'horizon du ciel.
 //
-// Pourquoi remplacer l'include et pas un plugin de matériau (comme foliage-plugin ou painted-ground-plugin) ?
+// Pourquoi remplacer l'include et pas un plugin de matériau (comme foliage-plugin ou terrain-surface-plugin) ?
 // - Le PBR n'offre qu'un point d'injection autour de la brume, CUSTOM_FRAGMENT_BEFORE_FOG, placé AVANT le calcul et suivi d'un
 //   max(couleur, 0) : un plugin ne peut ni neutraliser ni remplacer la brume de Babylon, seulement tricher en amont (précompenser
 //   la couleur pour que le mélange d'origine donne le bon résultat), ce qui diverge quand la visibilité tend vers 0.
@@ -36,18 +36,14 @@ color.rgb=mix(vFogColor,color.rgb,fog);
 `;
 
 /**
- * Remplaçant : seule la branche PBR change ; la ligne standard (`color.rgb=mix(vFogColor,color.rgb,fog);`) est celle de Babylon, mot
- * pour mot, et ne s'exécute plus que hors PBR.
+ * Remplaçant (ADR 0012 : tout est linéaire) : le PBR prend la ligne du standard, mot pour mot — brume linéaire, visibilité non
+ * convertie. La conversion `toLinearSpace(fog)` de Babylon (brume bien plus épaisse sur le PBR) disparaît.
  * Attention : Babylon appelle cet include avec `(color,finalColor)` pour le PBR, ce qui remplace TOUT « color » en minuscules par
  * « finalColor » — d'où l'absence de ce mot ailleurs que dans `color.rgb` (« vFogColor », avec une majuscule, n'est pas touché).
  */
 export const PBR_FOG_FRAGMENT = `#ifdef FOG
 float fog=CalcFogFactor();
-#ifdef PBR
-color.rgb=toLinearSpace(mix(vFogColor,toGammaSpace(color.rgb),fog));
-#else
 color.rgb=mix(vFogColor,color.rgb,fog);
-#endif
 #endif
 `;
 

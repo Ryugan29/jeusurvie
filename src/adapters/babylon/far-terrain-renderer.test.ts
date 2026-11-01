@@ -3,7 +3,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildFarTerrain, type FarTerrainRequest, type FarTerrainResult } from '../render-data/far-terrain';
 import { FAR_TERRAIN_GROUP, FAR_WET_DARKEN, FarTerrainRenderer, type FarTerrainWorkerLike } from './far-terrain-renderer';
-import { WET_DARKEN } from './painted-ground-plugin';
+import { WET_ALBEDO_DARKEN } from '../render-data/ground-materials';
 
 /** Faux worker : garde les demandes ; `answer` calcule et rend (comme le vrai, mais à la demande du test). */
 function fakeWorker(): FarTerrainWorkerLike & { requests: FarTerrainRequest[]; answer(i?: number): void } {
@@ -26,14 +26,30 @@ describe('FarTerrainRenderer (relief lointain, vrai moteur sans carte graphique)
   let engine: NullEngine, scene: Scene;
   const options = { halfSizeM: 400, stepM: 100, innerRadiusM: 300, recenterM: 500, sinkM: 3 };
 
+  it('matériau physique comme le sol proche (même lumière, même ciel), mat, couleur des sommets', () => {
+    const far = new FarTerrainRenderer(scene, 7, options, fakeWorker());
+    expect(far.material.getClassName()).toBe('PBRMaterial');
+    expect(far.material.metallic).toBe(0);
+    expect(far.material.roughness).toBeGreaterThan(0.8);
+  });
+
+  it('setHaze : le bord de la grille se fond dans la couleur de l’horizon donnée', () => {
+    const far = new FarTerrainRenderer(scene, 7, options, fakeWorker());
+    far.setHaze([0.4, 0.5, 0.6]);
+    expect((far.material.pluginManager?.getPlugin('FarTerrain') as unknown as { haze: number[] }).haze).toEqual([0.4, 0.5, 0.6]);
+  });
+
   it('setWetness : le relief lointain fonce sous la pluie comme le sol proche (pas de frontière sec / mouillé)', () => {
     const far = new FarTerrainRenderer(scene, 7, options, fakeWorker());
+    const plugin = far.material.pluginManager?.getPlugin('FarTerrain') as unknown as { albedoFactor: number; roughness: number };
     far.setWetness(0);
-    expect(far.material.diffuseColor.r).toBeCloseTo(1, 6);
+    expect(plugin.albedoFactor).toBeCloseTo(1, 6);
+    const dryRoughness = plugin.roughness;
     far.setWetness(1);
-    expect(far.material.diffuseColor.g).toBeCloseTo(1 - FAR_WET_DARKEN, 6);
-    expect(FAR_WET_DARKEN).toBeGreaterThanOrEqual(WET_DARKEN * 0.5); // entre la pente (½ effet) et le plat (effet plein)
-    expect(FAR_WET_DARKEN).toBeLessThanOrEqual(WET_DARKEN);
+    expect(plugin.albedoFactor).toBeCloseTo(1 - FAR_WET_DARKEN, 6);
+    expect(plugin.roughness).toBeLessThan(dryRoughness); // l'eau lisse la matière
+    expect(FAR_WET_DARKEN).toBeGreaterThanOrEqual(WET_ALBEDO_DARKEN * 0.5); // entre la pente (½ effet) et le plat (effet plein)
+    expect(FAR_WET_DARKEN).toBeLessThanOrEqual(WET_ALBEDO_DARKEN);
   });
   beforeEach(() => {
     engine = new NullEngine();
@@ -91,6 +107,8 @@ describe('FarTerrainRenderer (relief lointain, vrai moteur sans carte graphique)
     const plugin = far.material.pluginManager!.getPlugin('FarTerrain')!;
     const code = plugin.getCustomCode('fragment')!;
     expect(code['CUSTOM_FRAGMENT_MAIN_BEGIN']).toContain('discard');
-    expect(code['CUSTOM_FRAGMENT_BEFORE_FOG']).toContain('vFogColor');
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FOG']).toContain('farTerrainHaze'); // fond vers l'horizon donné, avec ou sans brume des matériaux
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FOG']).toContain('finalColor.rgb'); // couleur finale du matériau physique
+    expect(code['CUSTOM_FRAGMENT_UPDATE_ALBEDO']).toContain('toLinearSpace(vColor.rgb)'); // palette sRGB → linéaire, comme le sol proche
   });
 });
