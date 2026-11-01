@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Type-checks the WHOLE Unity project code (Core + Runtime + Editor) outside Unity: real UnityEngine reference assemblies
+       (2021.3 modules, the newest available offline) + Stubs/ for the package APIs. Pass -p:UnityRef=<folder of UnityEngine*.dll>.
+       -p:Variant=Minimal checks the fallback branches (legacy input, no glTFast). Not a substitute for the Unity compiler. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0618;CS1701;CS1702</NoWarn>
+    <UnityRef Condition="'$(UnityRef)' == ''">/tmp/claude-0/-home-user-jeusurvie/a786a5e2-37e3-530d-a35a-b243dc05eb2f/scratchpad/unityref/unityengine.modules/lib/net45</UnityRef>
+    <DefineConstants Condition="'$(Variant)' != 'Minimal'">$(DefineConstants);UNITY_EDITOR;ENABLE_INPUT_SYSTEM;JEUSURVIE_INPUTSYSTEM;JEUSURVIE_GLTFAST</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/JeuSurvie/Scripts/Core/**/*.cs" />
+    <Compile Include="../../Assets/JeuSurvie/Scripts/Runtime/**/*.cs" />
+    <Compile Include="../../Assets/JeuSurvie/Scripts/Editor/**/*.cs" Condition="'$(Variant)' != 'Minimal'" />
+    <Compile Include="Stubs/*.cs" />
+    <Reference Include="$(UnityRef)/UnityEngine*.dll" />
+  </ItemGroup>
+</Project>

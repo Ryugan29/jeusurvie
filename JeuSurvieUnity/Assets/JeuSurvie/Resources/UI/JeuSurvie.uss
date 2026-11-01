@@ -1,0 +1,38 @@
+/* Port of src/spike/spike.css: demo panel, pause overlay and Réglages → Graphismes (mockup v1, gold on dark ink). */
+.racine { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+
+.panneau { position: absolute; left: 10px; top: 10px; padding: 8px 12px; border-radius: 10px; background-color: rgba(20, 25, 45, 0.6); }
+.panneau Label { color: rgb(255, 255, 255); font-size: 13px; margin: 0; padding: 0; }
+.panneau .touches { opacity: 0.8; }
+
+.voile-pause { position: absolute; left: 0; top: 0; right: 0; bottom: 0; align-items: center; justify-content: center; background-color: rgba(15, 20, 35, 0.35); }
+.voile-pause .texte { padding: 14px 22px; border-radius: 12px; background-color: rgba(20, 25, 45, 0.75); color: rgb(255, 255, 255); font-size: 18px; -unity-text-align: middle-center; }
+.bouton-voile { margin-top: 12px; padding: 9px 18px; border-radius: 10px; border-width: 1px; border-color: rgb(91, 74, 46); background-color: rgba(22, 18, 30, 0.88); color: rgb(232, 182, 73); font-size: 15px; -unity-font-style: bold; }
+.bouton-voile:hover { background-color: rgba(232, 182, 73, 0.16); }
+.bouton-voile:focus { border-color: rgb(255, 216, 107); }
+
+.reglages-voile { position: absolute; left: 0; top: 0; right: 0; bottom: 0; align-items: center; justify-content: center; padding: 16px; background-color: rgba(10, 8, 16, 0.45); }
+.reglages-fenetre { flex-direction: row; width: 880px; max-width: 100%; max-height: 560px; border-width: 1px; border-color: rgb(91, 74, 46); border-radius: 14px; background-color: rgba(22, 18, 30, 0.92); overflow: hidden; }
+.reglages-nav { width: 190px; padding: 14px 12px; border-right-width: 1px; border-color: rgb(91, 74, 46); }
+.reglages-titre { margin: 4px 4px 12px 4px; color: rgb(232, 182, 73); font-size: 22px; -unity-font-style: bold; }
+.reglages-onglet { -unity-text-align: middle-left; padding: 9px 10px; border-width: 0; border-radius: 7px; background-color: rgba(232, 182, 73, 0.14); color: rgb(232, 182, 73); font-size: 15px; }
+.reglages-nav-pied { flex-grow: 1; justify-content: flex-end; }
+.reglages-lien { padding: 0; margin: 0 0 8px 0; border-width: 0; background-color: rgba(0, 0, 0, 0); color: rgb(201, 189, 160); font-size: 14px; -unity-text-align: middle-left; }
+.reglages-lien:hover { color: rgb(232, 182, 73); }
+.reglages-bouton { padding: 8px 12px; margin: 0 0 8px 0; border-radius: 9px; border-width: 1px; border-color: rgb(91, 74, 46); background-color: rgba(232, 182, 73, 0.1); color: rgb(244, 236, 216); font-size: 15px; }
+.reglages-bouton:hover { background-color: rgba(232, 182, 73, 0.2); }
+.reglages-aide { font-size: 12px; color: rgb(153, 153, 153); }
+.reglages-contenu { flex-grow: 1; flex-shrink: 1; padding: 16px 20px; }
+.reglages-ligne { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 4px 0 14px 0; border-bottom-width: 1px; border-color: rgba(255, 255, 255, 0.07); }
+.reglages-libelle { font-size: 15px; color: rgb(244, 236, 216); }
+.reglages-selecteur { flex-direction: row; border-width: 1px; border-color: rgb(91, 74, 46); border-radius: 9px; overflow: hidden; }
+.reglages-choix { min-width: 74px; padding: 8px 12px; margin: 0; border-width: 0; border-left-width: 1px; border-color: rgba(91, 74, 46, 0.6); border-radius: 0; background-color: rgba(0, 0, 0, 0); color: rgb(201, 189, 160); font-size: 13px; -unity-font-style: bold; letter-spacing: 1px; }
+.reglages-choix:first-child { border-left-width: 0; }
+.reglages-choix:hover { background-color: rgba(232, 182, 73, 0.12); color: rgb(244, 236, 216); }
+.reglages-choix:focus { border-color: rgb(255, 216, 107); }
+.reglages-choix.actif { background-color: rgb(232, 182, 73); color: rgb(29, 20, 5); }
+.reglages-carte { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border-width: 1px; border-color: rgba(255, 255, 255, 0.1); background-color: rgba(0, 0, 0, 0.3); }
+.reglages-carte-titre { margin: 0 0 4px 0; color: rgb(232, 182, 73); font-size: 17px; -unity-font-style: bold; }
+.reglages-resume { margin: 0 0 8px 0; color: rgb(244, 236, 216); white-space: normal; }
+.reglages-detail { color: rgb(201, 189, 160); font-size: 14px; margin: 3px 0 3px 8px; white-space: normal; }
+.reglages-etat { min-height: 20px; margin: 12px 0 0 0; color: rgb(201, 189, 160); font-size: 13px; white-space: normal; }
