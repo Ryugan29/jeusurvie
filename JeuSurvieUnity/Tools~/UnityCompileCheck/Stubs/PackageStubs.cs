@@ -35,8 +35,15 @@ namespace GLTFast
         public bool GenerateMipMaps { get; set; }
         public int AnisotropicFilterLevel { get; set; }
     }
+    public interface IDownloadProvider { }
+    public interface IDeferAgent { }
+    public interface IGltfReadable
+    {
+        Texture2D GetTexture(int index = 0);
+    }
     public class GltfImport
     {
+        public GltfImport(IDownloadProvider downloadProvider = null, IDeferAgent deferAgent = null, Materials.IMaterialGenerator materialGenerator = null, Logging.ICodeLogger logger = null) { }
         public Task<bool> Load(string url, ImportSettings importSettings = null, CancellationToken cancellationToken = default) => null;
         public Task<bool> InstantiateMainSceneAsync(Transform parent, CancellationToken cancellationToken = default) => null;
         public int MaterialCount => 0;
@@ -48,9 +55,34 @@ namespace GLTFast
         public class MaterialBase
         {
             public enum AlphaMode { Opaque, Mask, Blend }
+            public string name;
             public float alphaCutoff;
             public bool doubleSided;
             public AlphaMode GetAlphaMode() => AlphaMode.Opaque;
+            public PbrMetallicRoughnessBase PbrMetallicRoughness => null;
+        }
+        public class TextureInfoBase
+        {
+            public int index = -1;
+        }
+        public class PbrMetallicRoughnessBase
+        {
+            public Color BaseColor => Color.white;
+            public TextureInfoBase BaseColorTexture => null;
+        }
+    }
+    namespace Logging
+    {
+        public interface ICodeLogger { }
+        public class ConsoleLogger : ICodeLogger { }
+    }
+    namespace Materials
+    {
+        public interface IMaterialGenerator
+        {
+            Material GetDefaultMaterial(bool pointsSupport = false);
+            Material GenerateMaterial(Schema.MaterialBase gltfMaterial, IGltfReadable gltf, bool pointsSupport = false);
+            void SetLogger(Logging.ICodeLogger logger);
         }
     }
 }

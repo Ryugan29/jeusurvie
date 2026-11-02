@@ -50,6 +50,7 @@ namespace JeuSurvie.Tests
             report.AppendLine($"\n{renderers.Length} objets dessinés (renderers actifs) :");
             foreach (var group in renderers.GroupBy(r => (r.GetType().Name, r.sharedMaterial != null ? r.sharedMaterial.shader.name : "(aucun matériau)")))
                 report.AppendLine($"  {group.Count(),4} × {group.Key.Item1} · {group.Key.Item2}");
+            var withoutMaterial = renderers.Where(r => r.sharedMaterials.Any(m => m == null)).Select(r => r.name).ToList();
             int nearGround = renderers.Count(r => r.sharedMaterial != null && r.sharedMaterial.shader.name == "JeuSurvie/Terrain");
 
             var materials = Resources.FindObjectsOfTypeAll<Material>().Where(m => m.shader != null && m.shader.name.Contains("JeuSurvie")).ToList();
@@ -67,6 +68,7 @@ namespace JeuSurvie.Tests
             Debug.Log(report.ToString());
 
             Assert.IsEmpty(broken, "shaders en erreur (dessinés en rose) — voir Builds/Capture/editor-play.txt");
+            Assert.IsEmpty(withoutMaterial, "objets sans matériau (dessinés en rose)");
             Assert.Greater(nearGround, 0, "aucun morceau de sol proche (JeuSurvie/Terrain) n'est dessiné");
             Assert.Greater(foliage, 0, "aucun matériau de végétation : la bibliothèque de modèles n'a rien chargé");
             Assert.Less(background, MaxBackgroundShareUnderHorizon, "on voit le fond à travers le sol (triangles du sol retournés ?)");

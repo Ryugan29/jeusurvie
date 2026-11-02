@@ -71,7 +71,7 @@ namespace JeuSurvie.Vegetation
 #if JEUSURVIE_GLTFAST
             string path = Path.Combine(baseDir, key + ".gltf");
             if (!File.Exists(path)) throw new FileNotFoundException(path);
-            var gltf = new GltfImport();
+            var gltf = new GltfImport(null, null, new SourceMaterialGenerator(pbrShader), new GLTFast.Logging.ConsoleLogger());
             var settings = new ImportSettings { AnimationMethod = AnimationMethod.None, GenerateMipMaps = true, AnisotropicFilterLevel = 4 };
             if (!await gltf.Load(new Uri(Path.GetFullPath(path)).AbsoluteUri, settings)) throw new IOException("chargement glTF refusé : " + path);
             var holder = new GameObject(key);

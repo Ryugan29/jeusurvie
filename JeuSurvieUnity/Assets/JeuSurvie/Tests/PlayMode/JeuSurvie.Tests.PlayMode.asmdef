@@ -2,6 +2,7 @@
     "name": "JeuSurvie.Tests.PlayMode",
     "rootNamespace": "JeuSurvie.Tests",
     "references": [
+        "JeuSurvie.Runtime",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
