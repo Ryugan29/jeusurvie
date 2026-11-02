@@ -606,7 +606,7 @@ namespace JeuSurvie.Bootstrap
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureBootstrap()
         {
-            if (FindFirstObjectByType<GameBootstrap>() != null) return;
+            if (FindAnyObjectByType<GameBootstrap>() != null) return;
             new GameObject("Jeu Survie").AddComponent<GameBootstrap>();
         }
     }

@@ -1,2 +1,6 @@
 node_modules/
-assets/
+/assets/
+# Ancien projet Babylon : ces dossiers étaient masqués par l’ancienne règle « assets/ »
+/dist/assets/
+/tests/assets/
+/.tsbuild/test/tests/assets/

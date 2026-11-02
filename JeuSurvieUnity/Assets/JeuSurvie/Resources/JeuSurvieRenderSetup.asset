@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8fb27c2b1e81d4b4db9c34eadf1b695d, type: 3}
+  m_Name: JeuSurvieRenderSetup
+  m_EditorClassIdentifier: JeuSurvie.Runtime::JeuSurvie.Rendering.RenderSetup
+  pipeline: {fileID: 11400000, guid: 4a76e4d1f68d47a42abdc7bfa152850f, type: 2}
+  renderer: {fileID: 11400000, guid: 50d541371aecf1644bcb560effd27eec, type: 2}
+  ambientOcclusion: {fileID: 142737477234483970, guid: 50d541371aecf1644bcb560effd27eec, type: 2}
+  atmosphere: {fileID: 1768807542959622456, guid: 50d541371aecf1644bcb560effd27eec, type: 2}
+  skyShader: {fileID: 4800000, guid: e6e78b97a5d076947967b764c68a0c5a, type: 3}
+  terrainShader: {fileID: 4800000, guid: dc56b7897d6d2ee438aef97cce759b2a, type: 3}
+  farTerrainShader: {fileID: 4800000, guid: 09915dc489592204aa6800b1cca24b6d, type: 3}
+  foliageShader: {fileID: 4800000, guid: 9e7a4eca48ca331499330f2407748fe8, type: 3}
+  naturePbrShader: {fileID: 4800000, guid: c258b7afd133a834386a95d6f87ac2bc, type: 3}
+  particleShader: {fileID: 4800000, guid: 32068d2a95eea5e4eae3bb5a733acb29, type: 3}
+  groundMatterShader: {fileID: 4800000, guid: b86af5f7f49e8be41a0b97017565d912, type: 3}
+  atmosphereShader: {fileID: 4800000, guid: e140f04d4b1d2474da19f8577c359379, type: 3}
