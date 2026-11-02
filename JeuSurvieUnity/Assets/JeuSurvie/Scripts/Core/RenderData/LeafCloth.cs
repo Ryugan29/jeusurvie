@@ -40,6 +40,9 @@ namespace JeuSurvie.Core.RenderData
         /// <summary>A move of the whole character longer than this in one frame (metres) is a jump, not a run (a teleport, her
         /// snap onto the ground once it is loaded): the leaves are carried along instead of flung against their limits.</summary>
         public double JumpM = 2.0;
+        /// <summary>Cloth steps per second: her legs sweep fast when she runs, and twice Unity's 120 keeps them from slipping
+        /// through the leaves between two steps (about 840 leaf points: a small cost).</summary>
+        public double SolverStepsPerSecond = 240;
     }
 
     public readonly struct LeafClothState
@@ -59,7 +62,7 @@ namespace JeuSurvie.Core.RenderData
     }
 
     /// <summary>A sphere the leaves cannot enter, carried by a bone of the rig, around T (0..1) of the way from Bone to its
-    /// child Toward: fitted on her skin there (LeafCloth.FitSphere), just inside it.</summary>
+    /// child Toward: fitted on her skin there (LeafCloth.FitSphere).</summary>
     public readonly struct BoneSphere
     {
         public readonly string Bone, Toward;
@@ -112,17 +115,24 @@ namespace JeuSurvie.Core.RenderData
         /// skirt, on the shoulder for the shoulder leaves (tenue.py ATTACHED_V).</summary>
         public const double AttachedV = 0.15;
 
-        /// <summary>How far a point of a leaf may stray from its rest shape: nothing where it is tied (v up to AttachedV), then
-        /// steadily more down to the piece's tipFreedomM at the tip (v = 1).</summary>
-        public static double MaxDistance(double tipFreedomM, double v) => tipFreedomM * Clamp01((v - AttachedV) / (1 - AttachedV));
+        /// <summary>How far a point of a leaf may stray from its rest shape: nothing where it is held (v up to AttachedV), then
+        /// quickly more below it (half the tip's freedom by mid-leaf: room to get out of a lifted thigh's way), up to the
+        /// piece's tipFreedomM at the tip (v = 1).</summary>
+        public static double MaxDistance(double tipFreedomM, double v) => tipFreedomM * Math.Pow(Clamp01((v - AttachedV) / (1 - AttachedV)), 0.75);
 
         // Fitting a limb's obstacle on her skin: the skin points within FitSliceM along the bone line around the wanted place
-        // and within FitReachM of the line (not the other leg), their centre, and the nearest of them less FitMarginM.
+        // and within FitReachM of the line (not the other leg), their centre, and their mean distance from it (a limb is
+        // oval: its narrowest side would let the leaves into its broad side), at most FitLeafGapM past the nearest of them,
+        // less FitMarginM.
         public const double FitSliceM = 0.04, FitReachM = 0.15, FitMarginM = 0.003;
+        /// <summary>The leaves rest at least this far off her skin (tenue.py): an obstacle never reaches further than this past
+        /// the nearest skin, or it would push them off their place.</summary>
+        public const double FitLeafGapM = 0.007;
         private const int FitMinPoints = 8;
 
         /// <summary>A limb's cross-section around T (0..1) of the way from `from` to `to` (bone line, same space as the skin
-        /// points): its centre and the radius that stays just inside the skin. False where there is no skin around.</summary>
+        /// points): its centre and its mean radius, never past the leaves resting by its narrowest side. False where there is
+        /// no skin around.</summary>
         public static bool FitSphere(IReadOnlyList<Vec3> skin, Vec3 from, Vec3 to, double t, out Vec3 centre, out double radius)
         {
             double ax = to.X - from.X, ay = to.Y - from.Y, az = to.Z - from.Z, length = Math.Sqrt(ax * ax + ay * ay + az * az);
@@ -143,13 +153,15 @@ namespace JeuSurvie.Core.RenderData
             }
             if (slice.Count < FitMinPoints) return false;
             centre = new Vec3(sx / slice.Count, sy / slice.Count, sz / slice.Count);
-            double nearest = double.MaxValue;
+            double sum = 0, nearest = double.MaxValue;
             foreach (Vec3 p in slice)
             {
                 double dx = p.X - centre.X, dy = p.Y - centre.Y, dz = p.Z - centre.Z, along = dx * ax + dy * ay + dz * az;
-                nearest = Math.Min(nearest, Math.Sqrt(Math.Max(0, dx * dx + dy * dy + dz * dz - along * along)));
+                double r = Math.Sqrt(Math.Max(0, dx * dx + dy * dy + dz * dz - along * along));
+                sum += r;
+                nearest = Math.Min(nearest, r);
             }
-            radius = nearest - FitMarginM;
+            radius = Math.Min(sum / slice.Count, nearest + FitLeafGapM) - FitMarginM;
             return radius > 0;
         }
 

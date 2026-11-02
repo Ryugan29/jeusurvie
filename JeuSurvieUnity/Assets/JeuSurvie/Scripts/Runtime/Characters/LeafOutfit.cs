@@ -100,6 +100,7 @@ namespace JeuSurvie.Characters
             cloth.coefficients = coefficients;
             cloth.sphereColliders = pairs.ToArray();
             cloth.stretchingStiffness = StretchingStiffness;
+            cloth.clothSolverFrequency = (float)tuning.SolverStepsPerSecond;
             cloth.useGravity = true;
             cloths.Add(cloth);
         }

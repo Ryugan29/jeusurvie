@@ -142,13 +142,23 @@ def stride(arm, amount=1.0):
     turn_bones(arm, ["thigh_l"], rot(-35)); turn_bones(arm, ["calf_l"], rot(45)); turn_bones(arm, ["thigh_r"], rot(20))
 
 
+def knee_up(arm, amount=1.0):
+    """A running stride at its peak: left knee raised high (thigh forward 70 degrees, knee bent 100), right thigh back 25."""
+    rot = lambda deg: Matrix.Rotation(math.radians(deg * amount), 3, "X")
+    turn_bones(arm, ["thigh_l"], rot(-70)); turn_bones(arm, ["calf_l"], rot(100)); turn_bones(arm, ["thigh_r"], rot(25))
+
+
 def render_outfit(arm):
-    """The outfit at rest and in a stride (without the game's cloth: the skinned shape the cloth starts from), and close-ups
-    of where the vines, the choker and the belt hold to the skin, at rest and with the knee bent."""
+    """The outfit at rest, in a stride and with a knee raised high as she runs (without the game's cloth: the skinned shape
+    the cloth starts from), and close-ups of where the vines, the choker and the belt hold to the skin, at rest and with the
+    knee bent."""
     shots = square_shots([("ceinture", (0.55, -0.60, 0.98), (0, 0, 0.94))])
     stride(arm)
     shots += square_shots([("foulee-profil", (1.4, -0.1, 0.80), (0, 0, 0.75)), ("foulee-34", (0.9, -1.0, 0.85), (0, 0, 0.75))])
     stride(arm, 0)
+    knee_up(arm)
+    shots += square_shots([("course-face", (0.3, -1.4, 0.95), (0, 0, 0.8)), ("course-profil", (1.4, -0.2, 0.9), (0, 0, 0.8))])
+    knee_up(arm, 0)
     compose(shots, os.path.join(OUT_DIR, "planche-tenue.png"))
     holds = square_shots([("collier", (0.12, -0.42, 1.46), (0, -0.04, 1.45)), ("liane-mollet", (0.40, -0.45, 0.30), (0.11, 0.03, 0.29))])
     stride(arm)

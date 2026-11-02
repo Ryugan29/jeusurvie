@@ -809,19 +809,18 @@ def make_vines(arm, anatomy, weights):
     sb.inputs["Roughness"].default_value = 0.3
     me.materials.append(seed_mat); pieces.append(seeds_o)
 
-    tenue.skin_rigid(pieces[0], arm)  # the belt rides on the pelvis
-    for o in pieces[1:]:
+    for o in pieces:  # the belt too: on the pelvis alone, the hip skin moving with the thighs came through it
         tenue.skin_on_surface(o, arm, weights)
     return pieces, [belt, choker] + strands + calves
 
 
 def make_outfit(arm, anatomy, weights, leaf_img):
-    """The leaves of the outfit: two rows tucked under the belt (the skirt), riding on the pelvis at their top and following
-    the thigh under them towards their tip; a fan over each shoulder, skinned like the skin under it."""
+    """The leaves of the outfit: two rows tucked under the belt (the skirt), riding on her waist at their top and carried by
+    the thigh they hang over towards their tip; a fan over each shoulder, skinned like the skin under it."""
     skirt_mat = card_material("MI_Elfe_Tenue_Feuilles", leaf_img, tint=0.72)
-    skirt = tenue.strips_object("Elfe_Jupe", skirt_mat, tenue.skirt_leaves(anatomy, random))
-    tenue.skin_skirt(skirt, arm, weights)
-    pads = tenue.strips_object("Elfe_Epaulettes", skirt_mat, tenue.shoulder_leaves(anatomy, random))
+    skirt, tips = tenue.strips_object("Elfe_Jupe", skirt_mat, tenue.skirt_leaves(anatomy, random))
+    tenue.skin_skirt(skirt, arm, weights, tips)
+    pads, _ = tenue.strips_object("Elfe_Epaulettes", skirt_mat, tenue.shoulder_leaves(anatomy, random))
     tenue.skin_on_surface(pads, arm, weights)
     return [skirt, pads]
 
@@ -1020,8 +1019,10 @@ def main():
     crown.data.materials[0] = uv_bark_material("MI_Elfe_Bois")
     bake_simple(crown, "T_Elfe_Bois", 1024, with_normal=True)
     make_eyebrows(arm)
-    make_outfit(arm, anatomy, weights, leaf_img)
+    skirt, _ = make_outfit(arm, anatomy, weights, leaf_img)
     weights.free()
+    tenue.shrink_under_skirt(body, skirt)  # after the outfit was fitted on her skin: it now has room
+    recompute_shading(body)
     make_long_hair(arm, body, hair_img, leaf_img)
     strip_extra_uvs([body, lashes, bpy.data.objects["Eyes"]])
     lod0 = [o for o in bpy.data.objects if o.type == "MESH"]

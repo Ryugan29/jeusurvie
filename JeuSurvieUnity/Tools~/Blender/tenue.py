@@ -1,6 +1,7 @@
-# The elf's outfit fitted on her skin (decision-2026-11-02-tenue-souple-et-lianes): a belt riding on the pelvis, skirt
+# The elf's outfit fitted on her skin (decision-2026-11-02-tenue-souple-et-lianes): a belt resting on her hips, skirt
 # leaves tucked under it that hang and follow her thighs, leaves lying over the shoulders, vines that touch the skin all along
-# (their volume kept, their ends tucked in), skinned so nothing slides when the rig moves. The leaves' free motion (wind,
+# (their volume kept, their ends tucked in), skinned so nothing slides when the rig moves, and the skin hidden under the
+# skirt drawn in a little so her moving muscles never push through it. The leaves' free motion (wind,
 # rain, her movements) is Unity Cloth's job in the game: here they get their rest shape, and their UV v (along the leaf,
 # by length) tells the game how free each point is: tied above ATTACHED_V, free at the tip (1). Used by build_elfe.py.
 import math
@@ -18,7 +19,11 @@ ATTACHED_V = 0.15  # the top of a leaf (UV v) that is tied and never moves: same
 BELT_Z, BELT_RADIUS = 0.962, 0.012
 BELT_BACK_RISE = 0.06  # the belt rises at the back, over the small of it: in her relaxed stance her buttocks rise
 TUCKED_M = (0.004, 0.007)  # how far off the skin the two rows of skirt leaves pass under the belt (inner, outer)
-FOLLOW_FROM_V = ATTACHED_V + 0.2  # below the belt a skirt leaf follows the skin under it fully from there down
+SHRINK_M = 0.012  # the skin hidden under the skirt and the belt is drawn in this far (hips, buttocks, top of the thighs)
+# A skirt leaf is carried by the thigh it hangs over from CARRY_TOP_M under her hip joints, fully from CARRY_FULL_M under
+# them; above, it follows the skin under it (near the joint the groin skin follows the pelvis: a thigh turning there would
+# fling the leaves up over the belt).
+CARRY_TOP_M, CARRY_FULL_M = 0.03, 0.15
 
 
 def _smoothstep(e0, e1, x):
@@ -112,10 +117,13 @@ def lay(anatomy, base, along, length, rows=5, clearance=0.005):
 
 def strips_object(name, material, leaves):
     """One mesh of leaf strips: each leaf is (rows, outward direction, width, roll); UV u across, v from the top (0) to the
-    tip (1) by length along the leaf. Each leaf's rows share their points (one piece for the cloth)."""
+    tip (1) by length along the leaf. Each leaf's rows share their points (one piece for the cloth). Returns the object
+    and, per vertex, the tip of its leaf."""
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
+    tips = []
     for rows, out, width, roll in leaves:
+        tips += [rows[-1]] * (2 * len(rows))
         along = [0.0]
         for a, b in zip(rows, rows[1:]):
             along.append(along[-1] + (b - a).length)
@@ -135,7 +143,7 @@ def strips_object(name, material, leaves):
     me.materials.append(material)
     o = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(o)
-    return o
+    return o, tips
 
 
 def skirt_leaves(anatomy, rng):
@@ -143,7 +151,7 @@ def skirt_leaves(anatomy, rng):
     the belt), passes under it against the skin and hangs over the hips; the outer row starts higher and is shorter, so
     the inner row's tips show under it."""
     leaves = []
-    for above, tucked, count, size, phase in ((0.018, TUCKED_M[0], 30, 0.24, 0.0), (0.03, TUCKED_M[1], 30, 0.20, 0.5)):
+    for above, tucked, count, size, phase in ((0.018, TUCKED_M[0], 30, 0.24, 0.0), (0.025, TUCKED_M[1], 30, 0.20, 0.5)):
         for k in range(count):
             theta = 360 * (k + phase) / count
             z = belt_z(theta)
@@ -152,7 +160,10 @@ def skirt_leaves(anatomy, rng):
             out = anatomy.normal_at(knot)
             out = Vector((out.x, out.y, 0)).normalized()
             length = size * rng.uniform(0.9, 1.1) + (z - BELT_Z)  # longer where the belt rises: the hem stays level
-            leaves.append(([top] + hang(anatomy, knot, out, length, clearance=tucked + 0.003), out, length * 0.42, rng.uniform(-0.25, 0.25)))
+            rows = [top] + hang(anatomy, knot, out, length, clearance=tucked + 0.003)
+            held = (knot - top).length / sum((b - a).length for a, b in zip(rows, rows[1:]))
+            assert held <= ATTACHED_V, f"the knot under the belt at v = {held:.2f}: the game holds only v <= {ATTACHED_V}"
+            leaves.append((rows, out, length * 0.42, rng.uniform(-0.25, 0.25)))
     return leaves
 
 
@@ -212,30 +223,55 @@ def _skin(o, arm, weights_of):
 
 
 def skin_on_surface(o, arm, weights):
-    """Skins `o` to the rig like the skin under it (vines, choker, shoulder leaves)."""
+    """Skins `o` to the rig like the skin under it (belt, vines, choker, shoulder leaves)."""
     _skin(o, arm, lambda v: weights.at(v.co))
 
 
-def skin_rigid(o, arm, bone="pelvis"):
-    """Skins `o` wholly to one bone: the belt rides on the pelvis and does not stretch when the thighs move."""
-    _skin(o, arm, lambda v: {bone: 1.0})
+def _only(acc, keep, at_least=1e-9):
+    """The weights of `acc` whose bone `keep(name)` accepts, summing to 1 (None when they share less than `at_least`)."""
+    kept = {k: w for k, w in acc.items() if keep(k)}
+    total = sum(kept.values())
+    return {k: w / total for k, w in kept.items()} if total >= at_least else None
 
 
-def skin_skirt(o, arm, weights):
-    """Skins the skirt leaves: their held top follows her waist like the belt (the skin under it, thighs left out); below
-    the belt each point comes to follow fully the skin under it (by FOLLOW_FROM_V), so a thigh moving forward carries the
-    leaves on it instead of coming through them. The cloth adds the swing, kept from sinking behind that place."""
-    uv = o.data.uv_layers[0].data
-    v_of = {loop.vertex_index: uv[loop.index].uv.y for loop in o.data.loops}
+def skin_skirt(o, arm, weights, tips):
+    """Skins the skirt leaves: near her hips each point follows the skin under it (the top lies on her waist, under the
+    belt); lower down each leaf comes to be carried by the thigh it hangs over (the thighs the skin under its tip follows),
+    so a knee lifted high carries the leaves in front of it, as on a real leaf skirt pivoting at the belt, instead of
+    coming through them. The cloth adds the swing, kept from sinking behind that place."""
+    hip_z = sum((arm.matrix_world @ arm.data.bones[b].head_local).z for b in ("thigh_l", "thigh_r")) / 2
 
     def weights_of(v):
         skin = weights.at(v.co)
-        waist = {k: w for k, w in skin.items() if not k.startswith("thigh")}
-        total = sum(waist.values())
-        waist = {k: w / total for k, w in waist.items()} if total > 0 else {"pelvis": 1.0}
-        share = _smoothstep(ATTACHED_V, FOLLOW_FROM_V, v_of.get(v.index, 0.0))
-        return {k: waist.get(k, 0.0) * (1 - share) + skin.get(k, 0.0) * share for k in set(waist) | set(skin)}
+        legs = _only(weights.at(tips[v.index]), lambda k: k.startswith("thigh"), at_least=0.25)  # a trace of thigh: not its leg
+        if legs is None:
+            return skin
+        share = _smoothstep(hip_z - CARRY_TOP_M, hip_z - CARRY_FULL_M, v.co.z)
+        return {k: skin.get(k, 0.0) * (1 - share) + legs.get(k, 0.0) * share for k in set(skin) | set(legs)}
     _skin(o, arm, weights_of)
+
+
+def shrink_under_skirt(body, skirt):
+    """Draws the skin hidden under the skirt and the belt in by SHRINK_M along its normal, as character artists do under
+    clothes: her hips, buttocks and thighs bulge as she walks and runs, and a few millimetres of room were not enough. It
+    fades out across the belt line (the leaf tops above it lie on the skin), towards the leaves' tips and into the creases
+    on her midline (buttocks, crotch: offset there, the skin would pinch), and leaves alone what is not hip or thigh (her
+    hands hang at the same height). Between leaves parted by the wind the skin is barely further in."""
+    uv = skirt.data.uv_layers[0].data
+    tips = sorted((skirt.matrix_world @ skirt.data.vertices[loop.vertex_index].co).z for loop in skirt.data.loops if uv[loop.index].uv.y > 0.99)
+    hem = tips[len(tips) // 2]  # where the leaves' tips mostly hang
+    names = {g.index: g.name for g in body.vertex_groups}
+    hips = {"pelvis", "spine_01", "thigh_l", "thigh_r"}
+    normals = [v.normal.copy() for v in body.data.vertices]  # Blender updates them as vertices move: take them first
+    for v in body.data.vertices:
+        if sum(g.weight for g in v.groups if names[g.group] in hips) < 0.5:
+            continue
+        co = body.matrix_world @ v.co
+        top = belt_z(math.degrees(math.atan2(abs(co.x), ecorce.Anatomy.TORSO_AXIS_Y - co.y)))  # from the front, as in torso()
+        hidden = (_smoothstep(top + 0.01, top - 0.01, co.z) * _smoothstep(hem, hem + 0.04, co.z)
+                  * _smoothstep(0.01, 0.03, abs(co.x)))
+        if hidden > 0:
+            v.co -= normals[v.index] * SHRINK_M * hidden
 
 
 def paint_contact(body, strands, reach=0.012):

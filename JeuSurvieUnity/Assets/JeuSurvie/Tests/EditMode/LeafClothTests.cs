@@ -138,7 +138,7 @@ namespace JeuSurvie.Tests
                 Assert.Greater(d, previous);
                 previous = d;
             }
-            Assert.GreaterOrEqual(LeafCloth.MaxDistance(Tuning.TipFreedomM, 0.5), 0.4 * Tuning.TipFreedomM, "le milieu de la feuille doit pouvoir s'écarter d'une cuisse qui avance");
+            Assert.GreaterOrEqual(LeafCloth.MaxDistance(Tuning.TipFreedomM, 0.5), 0.5 * Tuning.TipFreedomM, "le milieu de la feuille doit pouvoir s'écarter d'une cuisse qui se lève");
             Assert.AreEqual(Tuning.TipFreedomM, LeafCloth.MaxDistance(Tuning.TipFreedomM, 1), 1e-9);
             Assert.AreEqual(Tuning.TipFreedomM, LeafCloth.MaxDistance(Tuning.TipFreedomM, 2), 1e-9);
         }
@@ -160,6 +160,39 @@ namespace JeuSurvie.Tests
             Assert.AreEqual(-0.2, centre.Y, 1e-3);
             Assert.AreEqual(0.0, centre.Z, 1e-3);
             Assert.AreEqual(0.07 - LeafCloth.FitMarginM, radius, 1e-3, "juste à l'intérieur de la peau");
+        }
+
+        // A thigh is oval, not round: an obstacle the size of its narrowest side would let the leaves into its broad side.
+        [Test]
+        public void AnOvalThighIsNotTakenForItsNarrowestSide()
+        {
+            var skin = new List<Vec3>();
+            for (int ring = 0; ring < 40; ring++)
+                for (int k = 0; k < 48; k++)
+                {
+                    double a = 2 * Math.PI * k / 48;
+                    skin.Add(new Vec3(0.08 * Math.Cos(a), -0.005 - 0.01 * ring, 0.06 * Math.Sin(a))); // 8 cm by 6 cm
+                }
+            Assert.IsTrue(LeafCloth.FitSphere(skin, new Vec3(0, 0, 0), new Vec3(0, -0.4, 0), 0.5, out _, out double radius));
+            Assert.Greater(radius, 0.06, "l'obstacle doit dépasser le côté le plus étroit de la cuisse, pas s'y arrêter");
+            Assert.LessOrEqual(radius, 0.06 + LeafCloth.FitLeafGapM, "sans repousser les feuilles posées à côté de ce côté étroit");
+        }
+
+        // Skin points of the buttock or the groin caught at the edge of the slice must not swell the obstacle: it would push
+        // the leaves off their place.
+        [Test]
+        public void AFringeOfFarSkinDoesNotSwellTheObstacle()
+        {
+            var skin = new List<Vec3>();
+            for (int ring = 0; ring < 40; ring++)
+                for (int k = 0; k < 24; k++)
+                {
+                    double a = 2 * Math.PI * k / 24, y = -0.005 - 0.01 * ring;
+                    skin.Add(new Vec3(0.06 * Math.Cos(a), y, 0.06 * Math.Sin(a)));
+                    if (k < 8) skin.Add(new Vec3(0.13 * Math.Cos(a), y, 0.13 * Math.Sin(a))); // a buttock's edge, 13 cm out
+                }
+            Assert.IsTrue(LeafCloth.FitSphere(skin, new Vec3(0, 0, 0), new Vec3(0, -0.4, 0), 0.5, out _, out double radius));
+            Assert.LessOrEqual(radius, 0.06 + LeafCloth.FitLeafGapM, "l'obstacle a gonflé jusqu'au bord de la fesse");
         }
 
         [Test]

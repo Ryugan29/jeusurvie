@@ -114,6 +114,7 @@ def _sample(img, gu, gv):
 
 class Anatomy:
     """Puts points on the rest-pose skin, seen from inside the torso, an arm or a leg (rays from the bones outwards)."""
+    TORSO_AXIS_Y = 0.02  # the torso's rays start on the vertical line x = 0, y = TORSO_AXIS_Y
 
     def __init__(self, body, arm):
         self.tree = BVHTree.FromPolygons([v.co for v in body.data.vertices], [p.vertices for p in body.data.polygons])
@@ -134,7 +135,7 @@ class Anatomy:
     def torso(self, theta, z, side):
         """`theta` degrees around from the front centre (180 = the spine) at height z."""
         t = math.radians(theta)
-        return self._hit(Vector((0.0, 0.02, z)), Vector((side * math.sin(t), -math.cos(t), 0.0)), f"torso {theta} {z}")
+        return self._hit(Vector((0.0, self.TORSO_AXIS_Y, z)), Vector((side * math.sin(t), -math.cos(t), 0.0)), f"torso {theta} {z}")
 
     def arm(self, along, around, side):
         """`along` metres from the body's mid-plane (elbow 0.39, wrist 0.64); `around` degrees: 0 front, 90 top (the outer

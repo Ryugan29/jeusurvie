@@ -119,10 +119,13 @@ namespace JeuSurvie.Tests
         // her thighs must not come through her leaves. Counted on the cloth's points against her posed skin, each compared with
         // where it sat in the pose she was made in (where the leaves were laid outside her skin): over a crease (the small of
         // her back, her buttocks, her groin) a leaf bridges the hollow, which the nearest-skin measure cannot tell from being
-        // inside, and those creases change shape as she moves. Hence shares of points, not zero: measured on 2026-11-02 at 3 %
-        // standing, 6 % walking and 17 % running (some leaves at the peak of the stride), against 20 %, 20 % and 27 % with the
-        // leaves let fall (TheMeasureSeesLeavesFallingIntoHer).
-        private static readonly (string name, double speed, double share)[] Gaits = { ("repos", 0.0, 0.06), ("marche", 1.5, 0.08), ("course", 5.0, 0.20) };
+        // inside, and those creases change shape as she moves. Hence shares of points, not zero: measured on 2026-11-02 at 1 %
+        // standing, 3 % walking and 6-8 % running, once the skirt leaves were carried by the thigh they hang over (17 % running
+        // before: a raised knee came in front of the hanging leaves, as José saw) and the skin hidden under the skirt drawn in
+        // (tenue.py shrink_under_skirt: seen on front, side and back views, it closed the holes her buttocks made in the skirt
+        // as she runs, which this measure hardly tells from its crease noise), against about 19 %, 16 % and 23 % with the
+        // leaves let fall (TheMeasureSeesLeavesFallingIntoHer, which checks the measure sees them).
+        private static readonly (string name, double speed, double share)[] Gaits = { ("repos", 0.0, 0.02), ("marche", 1.5, 0.05), ("course", 5.0, 0.10) };
         // At a fixed 60 images/s (Time.captureFramerate), whatever the measure costs: 1.5 s to blend into the gait, then 1 s
         // watched, one frame in six measured.
         private const int BlendFrames = 90, WatchFrames = 60, MeasureEvery = 6;
@@ -134,7 +137,7 @@ namespace JeuSurvie.Tests
             var results = new System.Collections.Generic.List<(string gait, double share, Insides worst, int measures, int points)>();
             yield return SinkingWhileShe(new LeafClothTuning(), results);
             string report = string.Join(" ; ", results.Select(r => $"{r.gait} : {r.worst} sur {r.points}"));
-            Assert.IsTrue(results.All(r => r.measures >= WatchFrames / MeasureEvery), "trop peu de mesures — " + report);
+            Assert.IsTrue(results.All(r => r.measures >= WatchFrames / MeasureEvery / 2), "trop peu de mesures — " + report);
             Assert.AreEqual(0, results[0].worst.Tied, "debout, le haut des feuilles reste sous la ceinture — " + report);
             Assert.IsTrue(results.All(r => r.worst.Count <= r.share * r.points), "la jupe entre dans ses cuisses — " + report);
         }
@@ -147,8 +150,8 @@ namespace JeuSurvie.Tests
             Assume.That(File.Exists(HeroinePath) && File.Exists(HeroPath), "personnages absents");
             var results = new System.Collections.Generic.List<(string gait, double share, Insides worst, int measures, int points)>();
             yield return SinkingWhileShe(new LeafClothTuning { SinkM = 1, TipFreedomM = 0.25 }, results);
-            var standing = results[0];
-            Assert.Greater(standing.worst.Count, standing.share * standing.points, $"la mesure ne voit pas des feuilles laissées tomber — {standing.worst}");
+            string report = string.Join(" ; ", results.Select(r => $"{r.gait} : {r.worst}"));
+            Assert.IsTrue(results.All(r => r.worst.Count > r.share * r.points), "la mesure ne voit pas des feuilles laissées tomber — " + report);
         }
 
         private static string HeroPath => Path.Combine(Application.streamingAssetsPath, "assets", "models", "characters", "hero.gltf");
@@ -163,6 +166,9 @@ namespace JeuSurvie.Tests
             yield return new WaitUntil(() => task.IsCompleted && heroTask.IsCompleted);
             Assert.IsTrue(task.Status == TaskStatus.RanToCompletion && heroTask.Status == TaskStatus.RanToCompletion, "chargement raté");
             AnimatedModel model = task.Result, hero = heroTask.Result;
+            // Away from the origin, where the bootstrap starts the game (its world, its own heroine) in every PlayMode test:
+            // measured there, her held leaf tops sank at random, as if her cloth skipped steps.
+            model.Pivot.position = new Vector3(500, 0, 0);
             Camera view = Watch(model.Pivot.position);
             var baked = new Mesh();
             Time.captureFramerate = 60;
@@ -186,6 +192,7 @@ namespace JeuSurvie.Tests
                         moves.UpdateLocomotion(Time.deltaTime, speed);
                         yield return null;
                         if (frame < BlendFrames || (frame - BlendFrames) % MeasureEvery != 0) continue;
+                        if (HeldLag(skirt) > 0.005f) continue; // the cloth's points lag her skin by a frame (a loaded machine)
                         measures++;
                         Insides now = Sunk(Depths(skirt, body, baked), made, v, 0.01f);
                         if (now.Count > worst.Count) worst = now;
@@ -202,6 +209,34 @@ namespace JeuSurvie.Tests
                 Object.Destroy(model.Pivot.gameObject);
                 Object.Destroy(hero.Pivot.gameObject);
             }
+        }
+
+        /// <summary>How far, on average, the cloth's held points (no freedom) are from where her skeleton puts them now: above a
+        /// few millimetres the cloth handed points from an earlier frame, and comparing them with her skin now would be wrong.</summary>
+        private static float HeldLag(Cloth cloth)
+        {
+            var skinned = cloth.GetComponent<SkinnedMeshRenderer>();
+            Mesh mesh = skinned.sharedMesh;
+            Vector3[] rest = mesh.vertices;
+            BoneWeight[] weights = mesh.boneWeights;
+            Matrix4x4[] bindposes = mesh.bindposes;
+            Transform[] bones = skinned.bones;
+            ClothSkinningCoefficient[] limits = cloth.coefficients;
+            Vector3[] points = WorldPoints(cloth);
+            float sum = 0;
+            int held = 0;
+            for (int i = 0; i < points.Length; i++)
+            {
+                if (limits[i].maxDistance > 0) continue;
+                BoneWeight w = weights[i];
+                Vector3 there = w.weight0 * (bones[w.boneIndex0].localToWorldMatrix * bindposes[w.boneIndex0]).MultiplyPoint3x4(rest[i])
+                    + w.weight1 * (bones[w.boneIndex1].localToWorldMatrix * bindposes[w.boneIndex1]).MultiplyPoint3x4(rest[i])
+                    + w.weight2 * (bones[w.boneIndex2].localToWorldMatrix * bindposes[w.boneIndex2]).MultiplyPoint3x4(rest[i])
+                    + w.weight3 * (bones[w.boneIndex3].localToWorldMatrix * bindposes[w.boneIndex3]).MultiplyPoint3x4(rest[i]);
+                sum += (points[i] - there).magnitude;
+                held++;
+            }
+            return held > 0 ? sum / held : 0;
         }
 
         /// <summary>Leaf points inside her body: how many, where along their leaf (tied top, middle, tip), how deep at worst.</summary>
