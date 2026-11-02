@@ -77,6 +77,7 @@ namespace JeuSurvie.Bootstrap
         private GameObject capsule;
         private AnimatedModel heroine;
         private RetargetedLocomotion heroineAnimator;
+        private LeafOutfit outfit;
         private AnimatedModel demon;
         private bool demonPlaced = true;
         private readonly List<Circle> creatureColliders = new List<Circle>();
@@ -199,6 +200,7 @@ namespace JeuSurvie.Bootstrap
                 else Debug.LogError("Démon illisible : la scène continue sans lui. " + demonTask.Exception?.GetBaseException().Message);
             }
             if (heroine != null) capsule.SetActive(false);
+            if (heroine != null && !options.Off("tenue")) outfit = AttachOutfit(heroine);
 
             // --- World and session
             int workers = Math.Min(3, Math.Max(1, SystemInfo.processorCount - 1));
@@ -216,8 +218,8 @@ namespace JeuSurvie.Bootstrap
             session.SetTimeOfDay(moment);
             replan = new ReplanGate();
             double yaw = options.Number("regard", 0.6), pitch = options.Number("inclinaison", 0.35);
-            rig = new CameraRig(yaw, pitch, 7);
-            heroineHeading = rig.Yaw;
+            rig = new CameraRig(yaw, pitch, MathUtil.Clamp(options.Number("recul", 7), CameraRigs.MinDistance, CameraRigs.MaxDistance));
+            heroineHeading = rig.Yaw + options.Number("cap", 0); // -cap 3.14: she faces the camera (photos of her front)
 
             hud.OverlayClicked += () => input.RequestCapture();
             hud.PresetSelected += SelectPreset;
@@ -281,6 +283,14 @@ namespace JeuSurvie.Bootstrap
                 throw;
             }
             return model;
+        }
+
+        /// <summary>The elf's leaf outfit moved by the cloth (-tenue=0: left as skinned, still); what failed is logged.</summary>
+        private static LeafOutfit AttachOutfit(AnimatedModel model)
+        {
+            LeafOutfit outfit = LeafOutfit.Attach(model, new LeafClothTuning());
+            foreach (string problem in outfit.Problems) Debug.LogWarning("[JeuSurvie] Tenue de l’héroïne : " + problem);
+            return outfit;
         }
 
         // --- Graphics profile ---------------------------------------------------------------------------------------------
@@ -516,6 +526,7 @@ namespace JeuSurvie.Bootstrap
             Lighting light = atmosphere.Light;
             double windStrength = windBase * (WindCalm + WindGusts * atmosphere.Wind);
             Shader.SetGlobalVector(ShaderGlobals.Wind, new Vector4((float)windTime, (float)windStrength, 0, 0));
+            outfit?.Update(windStrength, Foliage.WindGust(shown.X, shown.Z, windTime), atmosphere.Wetness);
             nightMagic?.Update(light, new Vector3((float)shown.X, (float)shown.Y, (float)shown.Z));
             lighting.Apply(atmosphere, time, frameMs / 1000, cam);
             Shader.SetGlobalVector(ShaderGlobals.SunToward, new Vector4((float)-light.SunDirection.X, (float)-light.SunDirection.Y, (float)-light.SunDirection.Z, translucent ? (float)light.ShadowIntensity : 0f));

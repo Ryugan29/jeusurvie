@@ -8,6 +8,7 @@ from mathutils import Vector, Matrix, noise
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # appended: inspect.py next to it must not hide the stdlib's
 import ecorce  # the bark grown in the skin (zones along the muscles) and the bark images
 import previews  # the review renders
+import tenue  # the outfit fitted on the skin (belt, leaves, vines) and its skin weights
 
 SRC, OUT_DIR = sys.argv[sys.argv.index("--") + 1:][:2]
 OUT_DIR = previews.OUT_DIR = os.path.abspath(OUT_DIR)  # Blender reads relative image paths against the .blend
@@ -433,44 +434,22 @@ def body_factors(n, rest, bark_images):
     crack = n.math("MULTIPLY", n.remap(n.voronoi(n.warped(rest, 60, 0.004), 110), 0.010, 0.0), n.attr("ElfeFissures"))
     keep = n.math("GREATER_THAN", n.voronoi(rest, 420, "F1", "Color"), 0.55)  # only some cells get a freckle
     freckle = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(n.voronoi(rest, 420, "F1"), 0.32, 0.18), keep), n.attr("ElfeTaches"))
-    f = dict(bark=bark, turning=turning, fissure=fissure, crack=crack, freckle=freckle,
-             lips=n.ellipse(rest, 0.0, 1.584, 0.022, 0.014, 1.8), bark_colour=bark_colour, furrow=furrow)
-    f.update(outfit_factors(n, rest))
-    return f
-
-
-def outfit_factors(n, rest):
-    """The painted part of the outfit (like WoW's painted armour): overlapping leaf scales on the hips, under the belt, and a
-    vine wound around each calf. Geometry pieces (belt, skirt, pads, wraps) sit on top of these."""
-    p = n.xyz(rest)
-    ax = n.math("ABSOLUTE", p["X"])
-    hips = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(p["Z"], 0.74, 0.77), n.math("SUBTRACT", 1.0, n.remap(p["Z"], 0.935, 0.955))),
-                  n.math("SUBTRACT", 1.0, n.remap(ax, 0.20, 0.23)))
-    angle = n.math("ARCTAN2", n.math("SUBTRACT", p["Y"], 0.05), n.math("SUBTRACT", ax, 0.111))
-    turns = n.math("FRACT", n.math("MULTIPLY_ADD", p["Z"], 9.0, n.math("DIVIDE", angle, 2 * math.pi)))
-    calf = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(p["Z"], 0.11, 0.13), n.math("SUBTRACT", 1.0, n.remap(p["Z"], 0.44, 0.46))),
-                  n.math("MULTIPLY", n.remap(ax, 0.05, 0.07), n.math("SUBTRACT", 1.0, n.remap(ax, 0.17, 0.19))))
-    wrap = n.math("MULTIPLY", calf, n.math("LESS_THAN", turns, 0.33))
-    scales = n.vscale(rest, (14, 14, 5))
-    cell = n.voronoi(scales, 1.0, "F1", "Color")
-    scale_edges = n.remap(n.voronoi(scales, 1.0), 0.04, 0.0)
-    return dict(hips=hips, wrap=wrap, cell=cell, scale_edges=scale_edges)
+    return dict(bark=bark, turning=turning, fissure=fissure, crack=crack, freckle=freckle, contact=n.attr("ElfeContact"),
+                lips=n.ellipse(rest, 0.0, 1.584, 0.022, 0.014, 1.8), bark_colour=bark_colour, furrow=furrow)
 
 
 def skin_colour(n, src, rest, f, glow):
     """Lavender skin with a painted face, freckles and fine cheek cracks; where it turns into bark it greys and darkens and
-    the furrows run on into it as fine fissures, then it becomes bark; then the painted outfit on top (hip leaf scales,
-    calf wraps); last, the veins and glyphs painted in vivid yellow-green so they read by day too (the game's night glow
-    then lights the same lines up)."""
+    the furrows run on into it as fine fissures, then it becomes bark; shaded where a vine or the belt presses on it; last,
+    the veins and glyphs painted in vivid yellow-green so they read by day too (the game's night glow then lights the same
+    lines up). Nothing is painted under the skirt: its leaves move, so the skin shows between them."""
     skin = face_paint(n, skin_tone(n, src), rest)
     skin = n.mix(skin, (0.46, 0.28, 0.38, 1), n.math("MULTIPLY", f["freckle"], 0.6))
     skin = n.mix(skin, (0.22, 0.13, 0.07, 1), f["crack"])
     skin = n.mix(skin, (0.13, 0.09, 0.09, 1), n.math("MULTIPLY", f["turning"], 0.75))  # skin ~(0.3, 0.2, 0.35): duller, darker
     skin = n.mix(skin, (0.08, 0.05, 0.04, 1), n.math("MULTIPLY", f["fissure"], 0.85))
     skin = n.mix(skin, f["bark_colour"], f["bark"])
-    scales = n.mix(n.mix(LEAF_GREEN, LEAF_YOUNG, f["cell"]), (0.03, 0.08, 0.02, 1), f["scale_edges"])
-    skin = n.mix(skin, scales, f["hips"])
-    skin = n.mix(skin, VINE, f["wrap"])
+    skin = n.mix(skin, (0.07, 0.05, 0.05, 1), n.math("MULTIPLY", f["contact"], 0.45))
     return n.mix(skin, VEIN_DAY, n.math("MULTIPLY", glow, VEIN_DAY_STRENGTH))
 
 
@@ -489,8 +468,7 @@ def relief_height(n, rest, f):
     lip_lines = n.math("MULTIPLY", f["lips"], n.math("MULTIPLY", n.noise(n.vscale(rest, (60, 1, 6)), 8), 0.25))
     bark = n.math("MULTIPLY_ADD", f["bark"], n.math("MULTIPLY", f["furrow"], -1.0), n.math("MULTIPLY", f["fissure"], -0.5))
     crack = n.math("MULTIPLY", f["crack"], -0.15)
-    outfit = n.math("ADD", n.math("MULTIPLY", n.math("MULTIPLY", f["hips"], f["scale_edges"]), -0.25), n.math("MULTIPLY", f["wrap"], 0.35))
-    return n.math("ADD", n.math("ADD", grain, lip_lines), n.math("ADD", n.math("ADD", bark, crack), outfit))
+    return n.math("ADD", n.math("ADD", grain, lip_lines), n.math("ADD", bark, crack))
 
 
 def roughness_value(n, f, glow):
@@ -500,8 +478,6 @@ def roughness_value(n, f, glow):
     r = n.mix_value(r, 0.88, f["bark"])
     r = n.mix_value(r, 0.97, n.math("MULTIPLY", f["bark"], f["furrow"]))
     r = n.mix_value(r, 0.80, n.math("MULTIPLY", f["turning"], 0.6))
-    r = n.mix_value(r, 0.70, f["hips"])
-    r = n.mix_value(r, 0.80, f["wrap"])
     return n.mix_value(r, 0.40, glow)
 
 
@@ -804,65 +780,20 @@ def skin_like_body(o, body, arm, head_share=None):
     o.modifiers.new("Armature", "ARMATURE").object = arm
 
 
-def section(outline, z, keep=lambda co: True, dz=0.012):
-    """Points of the body's outline (its vertices before the bark densified the skin, so their spread stays even)
-    within dz of height z (the slab is widened until it holds some points)."""
-    pts = []
-    while not pts:
-        pts = [co for co in outline if abs(co.z - z) < dz and keep(co)]
-        dz *= 2
-    centre = sum(pts, Vector()) / len(pts)
-    return pts, centre
-
-
-def ring_points(outline, z, count, pad, keep=lambda co: True, phase=0.0):
-    """Points around the body at height z, `pad` metres outside the skin, evenly spread in angle."""
-    pts, centre = section(outline, z, keep)
-    out = []
-    for k in range(count):
-        a = 2 * math.pi * (k + phase) / count
-        d = Vector((math.cos(a), math.sin(a), 0))
-        inside = [(p - centre).xy.length for p in pts if abs(math.atan2((p - centre).y, (p - centre).x) - a + math.pi) % (2 * math.pi) - math.pi < math.pi / count * 1.5]
-        r = max(inside) if inside else max((p - centre).xy.length for p in pts) * 0.8
-        out.append(Vector((centre.x, centre.y, z)) + d * (r + pad))
-    return out, centre
-
-
-# --- Outfit: leather belt, two rows of leaf skirt, leaf shoulder pads, vine necklace with glowing seeds, calf wraps
-def make_outfit(arm, body, leaf_img, outline):
+# --- Outfit, fitted on the skin by tenue.py. Before the bake: what presses on the skin (belt, vine choker and its strands,
+# seeds, calf vines), so the skin can be shaded where they touch. After it: the leaves (skirt, shoulders), which the game
+# moves with Unity Cloth.
+def make_vines(arm, anatomy, weights):
+    """Returns the pieces and the lines that touch the skin."""
     leather = flat_material("MI_Elfe_Tenue_Cuir", LEATHER); leather.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.75
     vine = flat_material("MI_Elfe_Lianes", VINE)
-    skirt_mat = card_material("MI_Elfe_Tenue_Feuilles", leaf_img, tint=0.72)
-    pieces = []
-
-    belt, _ = ring_points(outline, 0.962, 40, 0.012)
-    pieces.append(tube_mesh("Elfe_Ceinture", [[(p, 0.012) for p in belt + belt[:1]]], bevel_res=2))
-    pieces[-1].data.materials.append(leather)
-
-    def skirt(bm, uv):
-        for z, count, size, phase in ((0.955, 26, 0.25, 0.0), (0.985, 26, 0.21, 0.5)):
-            ring, centre = ring_points(outline, z, count, 0.008, phase=phase)
-            for p in ring:
-                outward = Vector((p.x - centre.x, p.y - centre.y, 0)).normalized()
-                d = outward * random.uniform(0.25, 0.4) + Vector((0, 0, -1))
-                leaf_card(bm, uv, p, d, size * random.uniform(0.9, 1.1), random.uniform(-0.3, 0.3), width_ratio=0.42)
-    pieces.append(cards_object("Elfe_Jupe", skirt_mat, skirt))
-
-    def shoulders(bm, uv):
-        for s in (1, -1):
-            for k in range(6):
-                base = Vector((0.125 * s, -0.045 + 0.018 * k, 1.470 - 0.006 * k))
-                d = Vector((0.85 * s, -0.30 + 0.14 * k, -0.55))
-                leaf_card(bm, uv, base, d, random.uniform(0.15, 0.19), random.uniform(-0.2, 0.2), width_ratio=0.5)
-    pieces.append(cards_object("Elfe_Epaulettes", skirt_mat, shoulders))
-
-    neck, neck_c = ring_points(outline, 1.475, 32, 0.004, keep=lambda co: abs(co.x) < 0.09)  # the neck only, not the T-posed arms
-    front = min(neck, key=lambda p: p.y)
-    chest, _ = section(outline, 1.40, keep=lambda co: abs(co.x) < 0.05)
-    chest_y = min(p.y for p in chest)
-    seeds = [Vector((0, chest_y - 0.012, 1.392)), Vector((0.034, chest_y - 0.008, 1.408)), Vector((-0.034, chest_y - 0.008, 1.408))]
-    strands = [[(p, 0.0035) for p in neck + neck[:1]]] + [[(front, 0.0025), (Vector((s.x, s.y + 0.004, s.z + 0.012)), 0.0025)] for s in seeds]
-    pieces.append(tube_mesh("Elfe_Collier", strands)); pieces[-1].data.materials.append(vine)
+    belt = tenue.belt_line(anatomy)
+    choker, strands, seeds = tenue.necklace(anatomy)
+    calves = [tenue.calf_vine(anatomy, s, phase=0.0 if s > 0 else 0.5) for s in (1, -1)]
+    pieces = [tube_mesh("Elfe_Ceinture", [belt], bevel_res=2), tube_mesh("Elfe_Collier", [choker] + strands),
+              tube_mesh("Elfe_Lianes_Jambes", calves)]
+    for o, m in zip(pieces, (leather, vine, vine)):
+        o.data.materials.append(m)
 
     bm = bmesh.new()
     for s in seeds:
@@ -878,22 +809,21 @@ def make_outfit(arm, body, leaf_img, outline):
     sb.inputs["Roughness"].default_value = 0.3
     me.materials.append(seed_mat); pieces.append(seeds_o)
 
-    wraps = []
-    for s in (1, -1):
-        pts = []
-        for i in range(46):
-            t = i / 45
-            z = 0.12 + 0.33 * t
-            a = t * 3 * 2 * math.pi
-            leg, c = section(outline, z, keep=lambda co, s=s: co.x * s > 0.03)
-            r = max(((p - c).xy.length for p in leg if abs(math.atan2((p - c).y, (p - c).x) - a + math.pi) % (2 * math.pi) - math.pi < 0.5), default=0.06)
-            pts.append((Vector((c.x + math.cos(a) * (r + 0.005), c.y + math.sin(a) * (r + 0.005), z)), 0.0055))
-        wraps.append(pts)
-    pieces.append(tube_mesh("Elfe_Lianes_Jambes", wraps)); pieces[-1].data.materials.append(vine)
+    tenue.skin_rigid(pieces[0], arm)  # the belt rides on the pelvis
+    for o in pieces[1:]:
+        tenue.skin_on_surface(o, arm, weights)
+    return pieces, [belt, choker] + strands + calves
 
-    for o in pieces:
-        skin_like_body(o, body, arm)
-    return pieces
+
+def make_outfit(arm, anatomy, weights, leaf_img):
+    """The leaves of the outfit: two rows tucked under the belt (the skirt), riding on the pelvis at their top and following
+    the thigh under them towards their tip; a fan over each shoulder, skinned like the skin under it."""
+    skirt_mat = card_material("MI_Elfe_Tenue_Feuilles", leaf_img, tint=0.72)
+    skirt = tenue.strips_object("Elfe_Jupe", skirt_mat, tenue.skirt_leaves(anatomy, random))
+    tenue.skin_skirt(skirt, arm, weights)
+    pads = tenue.strips_object("Elfe_Epaulettes", skirt_mat, tenue.shoulder_leaves(anatomy, random))
+    tenue.skin_on_surface(pads, arm, weights)
+    return [skirt, pads]
 
 
 # --- Long hair: ribbons from the scalp down the back, plus a few vines with leaves running through them
@@ -1071,11 +1001,13 @@ def main():
         refine_face(part)
         sculpt_face(part)
         recompute_shading(part)
-    outline = [v.co.copy() for v in body.data.vertices]  # the outfit is fitted on these, as before the bark grew
     bark_colour, bark_height, height = ecorce.paint_bark(OUT_DIR)
     ecorce.grow_bark(body, arm, height)
     recompute_shading(body)
+    anatomy, weights = ecorce.Anatomy(body, arm), tenue.SurfaceWeights(body)  # the final skin, for the outfit
+    _, touching = make_vines(arm, anatomy, weights)
     paint_body_masks(body)
+    tenue.paint_contact(body, touching)
     bsdf = body_material(body, (bark_colour, bark_height))
     use_baked_body(body, bake_body(body, bsdf))
     body.data.materials[0].name = "MI_Elfe_Corps"
@@ -1088,7 +1020,8 @@ def main():
     crown.data.materials[0] = uv_bark_material("MI_Elfe_Bois")
     bake_simple(crown, "T_Elfe_Bois", 1024, with_normal=True)
     make_eyebrows(arm)
-    make_outfit(arm, body, leaf_img, outline)
+    make_outfit(arm, anatomy, weights, leaf_img)
+    weights.free()
     make_long_hair(arm, body, hair_img, leaf_img)
     strip_extra_uvs([body, lashes, bpy.data.objects["Eyes"]])
     lod0 = [o for o in bpy.data.objects if o.type == "MESH"]
@@ -1101,6 +1034,7 @@ def main():
     previews.render_previews(cam)
     previews.render_belly()
     previews.render_flex(arm)
+    previews.render_outfit(arm)
     previews.go_night()
     previews.render_night(cam)
 

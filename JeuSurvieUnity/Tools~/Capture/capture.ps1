@@ -1,9 +1,11 @@
 ﻿# Visual check in one command: builds the game (Windows), runs it with -capture (morning, noon, dusk, night screenshots, then
 # quits) and prints what the game logged. Unity must be closed on this project, and Unity Hub open (it holds the licence).
-#   powershell -ExecutionPolicy Bypass -File "Tools~/Capture/capture.ps1" [-Quality high] [-SkipBuild]
+#   powershell -ExecutionPolicy Bypass -File "Tools~/Capture/capture.ps1" [-Quality high] [-SkipBuild] [-Arguments "-meteo orage -recul 3"]
+# -Arguments: game switches added for this run (weather, camera…), e.g. to photograph the elf's outfit in a storm.
 param(
     [ValidateSet('low', 'medium', 'high', 'ultra')] [string]$Quality = 'high',
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$Arguments = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -26,8 +28,8 @@ if (-not $SkipBuild) {
 New-Item -ItemType Directory -Force $photos | Out-Null
 Get-ChildItem $photos -Filter *.png | Remove-Item
 Write-Host "Lancement du jeu et prise des photos…"
-$p = Start-Process $exe -Wait -PassThru -ArgumentList @('-screen-fullscreen', '0', '-screen-width', '1600', '-screen-height', '900',
-    '-qualite', $Quality, '-capture', "`"$photos`"", '-logFile', "`"$out/player.log`"")
+$p = Start-Process $exe -Wait -PassThru -ArgumentList (@('-screen-fullscreen', '0', '-screen-width', '1600', '-screen-height', '900',
+    '-qualite', $Quality, '-capture', "`"$photos`"", '-logFile', "`"$out/player.log`"") + ($Arguments -split '\s+' | Where-Object { $_ }))
 if ($p.ExitCode -ne 0) { throw "Le jeu s'est arrêté avec le code $($p.ExitCode) : voir $out/player.log" }
 
 Write-Host "`nPhotos : $photos"

@@ -20,9 +20,11 @@ ZQSD/WASD (touches physiques) marcher · souris regarder · molette distance · 
 
 ## Paramètres de lancement (ex-paramètres d'adresse)
 Dans l'inspecteur de `GameBootstrap` (champ *Launch Arguments*) ou en ligne de commande d'un build :
-`-seed 12345 -x -3500 -z -2000 -heure nuit -meteo orage -qualite ultra -lieu montagne -view 512 -regard 0.6 -inclinaison 0.35`
+`-seed 12345 -x -3500 -z -2000 -heure nuit -meteo orage -qualite ultra -lieu montagne -view 512 -regard 0.6 -inclinaison 0.35 -recul 7`
 Interrupteurs « =0 » : `-ombres=0 -ao=0 -ssr=0 -rayons=0 -aa=0 -brume=0 -dof=0 -flou=0 -pluie=0 -nuages=0 -vent=0
--translucide=0 -lointain=0 -ibl=0 -magie=0 -elagage=0 -couvert=0 -vegetation=0 -personnages=0 -post=0 -gouttes=0`
+-translucide=0 -lointain=0 -ibl=0 -magie=0 -elagage=0 -couvert=0 -vegetation=0 -personnages=0 -tenue=0 -post=0 -gouttes=0`
+(`-tenue=0` : feuilles de la tenue de l'elfe figées, sans tissu ; `-recul` : distance de la caméra, 2,5 à 14 m ; `-cap 3.14` :
+l'elfe tournée vers la caméra, en radians, pour photographier son devant)
 · `-couvert 50` (rayon du couvre-sol) · `-tonemap neutre` · `-assets <dossier models>` · `-capture <dossier>` (captures
 matin/midi/crépuscule/nuit puis quitte).
 

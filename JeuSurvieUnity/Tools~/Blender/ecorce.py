@@ -127,6 +127,10 @@ class Anatomy:
         assert hit is not None, f"no skin found for {what}"
         return hit
 
+    def normal_at(self, p):
+        """Outward normal of the skin nearest to p."""
+        return self.tree.find_nearest(p)[1]
+
     def torso(self, theta, z, side):
         """`theta` degrees around from the front centre (180 = the spine) at height z."""
         t = math.radians(theta)
@@ -174,7 +178,7 @@ ZONES = (
 )
 
 
-def _chaikin(points, rounds=2):
+def chaikin(points, rounds=2):
     """Rounds the corners of a polyline (rows: any coordinates), keeping its two ends."""
     for _ in range(rounds):
         a, b = points[:-1], points[1:]
@@ -190,7 +194,7 @@ class Zone:
     def __init__(self, anatomy, spec, index):
         side, knots, self.relief, self.lift = spec
         pts = [list(getattr(anatomy, kind)(*args, side)) + [w] for kind, *args, w in knots]
-        smooth = _chaikin(np.array(pts, np.float64))  # x, y, z and the half-width, rounded together
+        smooth = chaikin(np.array(pts, np.float64))  # x, y, z and the half-width, rounded together
         line, widths = [], []
         for a, b in zip(smooth, smooth[1:]):
             steps = max(1, int(np.linalg.norm(b[:3] - a[:3]) / 0.01))
