@@ -27,3 +27,7 @@
 /Tools~/UnityCompileCheck/obj/
 !/Tools~/CoreTests/CoreTests.csproj
 !/Tools~/UnityCompileCheck/UnityCompileCheck.csproj
+# Blender character build: generated renders, bakes and exports (rebuilt by Tools~/Blender/build_elfe.py)
+/Tools~/Blender/sortie/
+# Backups of the original CC0 models (like StreamingAssets/assets, not versioned)
+/Tools~/Sauvegardes/

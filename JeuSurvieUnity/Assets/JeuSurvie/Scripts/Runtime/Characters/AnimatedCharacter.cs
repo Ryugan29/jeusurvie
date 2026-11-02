@@ -1,7 +1,7 @@
 // Ports of babylon/animated-model, locomotion-animator and capsule:
 //   - an animated model (character, creature) loaded from glTF (glTFast, legacy animation clips), fitted to a height with its
 //     feet on the origin of its « pivot » (position = feet, yaw = heading), materials converted to NaturePBR (surfaces by name,
-//     tints such as the heroine hair);
+//     optional tints, PBR maps and LOD copies carried over from the glTF);
 //   - animation retargeting from another file with the same skeleton (hero → heroine): bones paired by name, rotations copied,
 //     the pelvis keeps its stride translation shifted by the rest-pose difference (moveBones);
 //   - locomotion: Idle / Walk / Run always playing, weights faded by the real ground speed (render-data/character-motion).
@@ -74,6 +74,7 @@ namespace JeuSurvie.Characters
                         m.SetFloat("_Roughness", (float)s.Roughness);
                         m.SetFloat("_EnvIntensity", (float)s.EnvironmentIntensity);
                         m.SetFloat("_UseVertexColor", 0);
+                        CopyMaps(mats[i], m);
                         converted[mats[i]] = m;
                     }
                     mats[i] = m;
@@ -84,10 +85,12 @@ namespace JeuSurvie.Characters
                 r.enabled = render;
                 model.Renderers.Add(r);
             }
-            // Rest-pose measure, then fit: pivot (scale) > fit (offset) > roots.
+            AddLods(fit.gameObject, model.Renderers);
+            // Rest-pose measure (body pieces only: not the crown, not the LOD copies), then fit: pivot (scale) > fit (offset) > roots.
             float minY = float.MaxValue, maxY = float.MinValue;
             foreach (Renderer r in model.Renderers)
             {
+                if (!CharacterLods.CountsForHeight(r.name)) continue;
                 Bounds b = r.bounds;
                 minY = Mathf.Min(minY, b.min.y);
                 maxY = Mathf.Max(maxY, b.max.y);
@@ -102,6 +105,47 @@ namespace JeuSurvie.Characters
             await Task.Yield();
             throw new NotSupportedException("glTFast (com.unity.cloud.gltfast) n'est pas installé : personnages indisponibles.");
 #endif
+        }
+
+        /// <summary>Meshes named « X_LOD1 / X_LOD2 » become levels of detail (CharacterLods); models without them are untouched.</summary>
+        private static void AddLods(GameObject root, List<Renderer> renderers)
+        {
+            var plan = CharacterLods.Plan(renderers.ConvertAll(r => r.name));
+            if (plan.Count < 2) return;
+            if (plan.Count != CharacterLods.ScreenHeights.Length)
+            {
+                Debug.LogWarning($"{root.name} : {plan.Count - 1} niveau(x) de détail, le jeu en attend {CharacterLods.ScreenHeights.Length - 1} : LOD ignorés.");
+                return;
+            }
+            var byName = new Dictionary<string, List<Renderer>>();
+            foreach (Renderer r in renderers)
+            {
+                if (!byName.TryGetValue(r.name, out List<Renderer> list)) byName[r.name] = list = new List<Renderer>();
+                list.Add(r);
+            }
+            var lods = new LOD[plan.Count];
+            for (int level = 0; level < plan.Count; level++)
+            {
+                var shown = new List<Renderer>();
+                foreach (string name in plan[level]) if (byName.TryGetValue(name, out List<Renderer> list)) shown.AddRange(list);
+                lods[level] = new LOD((float)CharacterLods.ScreenHeights[level], shown.ToArray());
+            }
+            var group = root.AddComponent<LODGroup>();
+            group.SetLODs(lods);
+            group.RecalculateBounds();
+        }
+
+        // What a glTF material may bring beyond its colour (SourceMaterialGenerator stores it on the source material): relief,
+        // roughness map, night-glow map, alpha cutout and double-sided drawing. Models without them keep the shader defaults.
+        private static readonly string[] MapProperties = { "_BumpMap", "_RoughnessMap", "_GlowMap" };
+        private static readonly string[] MapSettings = { "_BumpScale", "_UseRoughnessMap", "_UseGlowMap", "_Glow", "_Cutoff", "_Cull" };
+
+        public static void CopyMaps(Material source, Material target)
+        {
+            foreach (string p in MapProperties)
+                if (source.HasProperty(p) && target.HasProperty(p) && source.GetTexture(p) != null) target.SetTexture(p, source.GetTexture(p));
+            foreach (string p in MapSettings)
+                if (source.HasProperty(p) && target.HasProperty(p)) target.SetFloat(p, source.GetFloat(p));
         }
 
         /// <summary>Plays `name` looping (the demon's Idle).</summary>

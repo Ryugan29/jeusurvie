@@ -60,15 +60,22 @@ namespace GLTFast
             public bool doubleSided;
             public AlphaMode GetAlphaMode() => AlphaMode.Opaque;
             public PbrMetallicRoughnessBase PbrMetallicRoughness => null;
+            public NormalTextureInfoBase NormalTexture => null;
+            public TextureInfoBase EmissiveTexture => null;
         }
         public class TextureInfoBase
         {
             public int index = -1;
         }
+        public class NormalTextureInfoBase : TextureInfoBase
+        {
+            public float scale = 1;
+        }
         public class PbrMetallicRoughnessBase
         {
             public Color BaseColor => Color.white;
             public TextureInfoBase BaseColorTexture => null;
+            public TextureInfoBase MetallicRoughnessTexture => null;
         }
     }
     namespace Logging

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using JeuSurvie.Characters;
+using JeuSurvie.Core.RenderData;
 using JeuSurvie.Vegetation;
 using NUnit.Framework;
 using UnityEngine;
@@ -37,7 +38,52 @@ namespace JeuSurvie.Tests
             Assert.AreEqual(before, GltfShaderMaterials(), "le chargement a créé des matériaux aux shaders glTFast (absents du jeu fabriqué)");
             Assert.IsNotEmpty(library.PartsOf("CommonTree_2"), "l'arbre n'a aucune pièce à dessiner");
             Assert.IsTrue(demon.Result.Renderers.All(r => r.sharedMaterials.All(m => m != null && m.shader == pbr)), "le démon a un matériau vide ou étranger");
+            Assert.IsTrue(demon.Result.Renderers.All(r => r.sharedMaterials.All(m => m.GetFloat("_Cull") == (float)UnityEngine.Rendering.CullMode.Back)),
+                "le démon (maillage fermé marqué double-face dans son glTF) doit garder l'élimination des faces arrière");
             Object.Destroy(demon.Result.Pivot.gameObject);
+        }
+
+        // The elf heroine brings PBR maps (relief, roughness, night glow), cut-out leaves and LOD copies: the loader must carry
+        // them onto the game's materials, build the LOD group and measure her height without the crown.
+        [UnityTest]
+        public IEnumerator HeroineKeepsHerMapsLodsAndHeight()
+        {
+            string path = Path.Combine(ModelsDir, "characters", "heroine", "heroine.gltf");
+            Assume.That(File.Exists(path), "héroïne absente");
+            Shader pbr = Shader.Find("JeuSurvie/NaturePBR");
+            Task<AnimatedModel> task = CharacterLoader.LoadAsync(path, 1.7, pbr);
+            yield return new WaitUntil(() => task.IsCompleted);
+            Assert.IsTrue(task.Status == TaskStatus.RanToCompletion, task.Exception?.GetBaseException().Message);
+            AnimatedModel model = task.Result;
+            yield return null;
+
+            var materials = model.Renderers.SelectMany(r => r.sharedMaterials).Distinct().ToDictionary(m => m.name, m => m);
+            Assert.IsTrue(materials.ContainsKey("MI_Elfe_Corps"), "matériaux : " + string.Join(", ", materials.Keys));
+            Material body = materials["MI_Elfe_Corps"];
+            Assert.IsNotNull(body.GetTexture("_BumpMap"), "le corps n'a pas de relief");
+            Assert.Greater(body.GetFloat("_BumpScale"), 0f);
+            Assert.AreEqual(1f, body.GetFloat("_UseRoughnessMap"), "le corps n'utilise pas sa carte de brillance");
+            Assert.AreEqual(1f, body.GetFloat("_UseGlowMap"), "le corps n'a pas sa carte de lueur");
+            Assert.IsNotNull(body.GetTexture("_GlowMap"));
+            Material leaves = materials["MI_Elfe_Feuilles"];
+            Assert.Greater(leaves.GetFloat("_Cutoff"), 0f, "les feuilles ne sont pas découpées");
+            Assert.AreEqual((float)UnityEngine.Rendering.CullMode.Off, leaves.GetFloat("_Cull"), "les feuilles ne sont pas double-face");
+
+            LODGroup group = model.Pivot.GetComponentInChildren<LODGroup>();
+            Assert.IsNotNull(group, "pas de groupe de LOD");
+            Assert.AreEqual(3, group.lodCount);
+
+            float minY = float.MaxValue, maxY = float.MinValue, topWithCrown = float.MinValue;
+            foreach (Renderer r in model.Renderers)
+            {
+                topWithCrown = Mathf.Max(topWithCrown, r.bounds.max.y);
+                if (!CharacterLods.CountsForHeight(r.name)) continue;
+                minY = Mathf.Min(minY, r.bounds.min.y);
+                maxY = Mathf.Max(maxY, r.bounds.max.y);
+            }
+            Assert.AreEqual(1.7f, maxY - minY, 0.03f, "la hauteur du corps (sans la couronne) doit faire 1,70 m");
+            Assert.Greater(topWithCrown, maxY + 0.1f, "la couronne doit dépasser au-dessus des 1,70 m du corps");
+            Object.Destroy(model.Pivot.gameObject);
         }
     }
 }

@@ -38,10 +38,12 @@ namespace JeuSurvie.Core.RenderData
         private static readonly (Regex pattern, SurfaceSpec surface)[] Table =
         {
             (new Regex("^rocks$|pathrocks|rock", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.82, 0.5)),
-            (new Regex("bark", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.9, 0.4)),
+            (new Regex("bark|bois", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.9, 0.4)),
             (new Regex("mushroom", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.45, 0.6)),
-            (new Regex("hair", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.42, 0.6)),
-            (new Regex("eye", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.15, 0.8)),
+            (new Regex("hair|cheveux|sourcils|cils", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.42, 0.6)),
+            (new Regex("eye|yeux", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.15, 0.8)),
+            (new Regex("feuille|leaf", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.7, 0.5)),
+            (new Regex("cuir|leather|tenue", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.75, 0.45)),
             (new Regex("skin|body|superhero|demon", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.55, 0.55)),
         };
 

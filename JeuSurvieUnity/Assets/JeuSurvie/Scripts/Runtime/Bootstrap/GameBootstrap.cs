@@ -47,7 +47,6 @@ namespace JeuSurvie.Bootstrap
         private const double ShadowMarginM = 40;
         private const double MouseSensitivity = 0.0025, EyeHeight = 1.5;
         private const double HeroineHeightM = 1.7, DemonHeightM = 2.6, DemonDistanceM = 6, DemonRadiusM = 0.9, SlowWalkFactor = 0.3;
-        private static readonly Dictionary<string, Color> HeroineTints = new Dictionary<string, Color> { { "MI_Hair_2", new Color(0.42f, 0.24f, 0.13f) } };
 
         private LaunchOptions options;
         private uint seed;
@@ -269,7 +268,7 @@ namespace JeuSurvie.Bootstrap
         private async Task<AnimatedModel> LoadHeroine(string modelsDir, Shader pbr)
         {
             AnimatedModel hero = await CharacterLoader.LoadAsync(Path.Combine(modelsDir, "characters", "hero.gltf"), HeroineHeightM, pbr, null, false);
-            AnimatedModel model = await CharacterLoader.LoadAsync(Path.Combine(modelsDir, "characters", "heroine", "heroine.gltf"), HeroineHeightM, pbr, HeroineTints);
+            AnimatedModel model = await CharacterLoader.LoadAsync(Path.Combine(modelsDir, "characters", "heroine", "heroine.gltf"), HeroineHeightM, pbr);
             try
             {
                 heroineAnimator = RetargetedLocomotion.Create(hero, model, new[] { "pelvis" });
