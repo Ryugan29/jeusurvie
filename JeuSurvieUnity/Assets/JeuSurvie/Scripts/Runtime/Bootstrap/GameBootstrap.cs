@@ -438,7 +438,9 @@ namespace JeuSurvie.Bootstrap
             windTime = (windTime + frameMs / 1000) % WindLoopS;
             fps.Record(frameMs);
 
-            RawInputFrame raw = input.Sample(hud.SettingsOpen);
+            // A press on a button (« Réglages graphiques »…) is for the interface: it must not start the game on its way.
+            bool overControl = hud.IsOverControl(hud.ScreenToPanel(input.PointerPosition));
+            RawInputFrame raw = input.Sample(hud.SettingsOpen || overControl);
             if (raw.ClickedGame && mode != InputMode.Playing && !hud.SettingsOpen) input.RequestCapture();
             foreach (ModeEvent e in raw.ModeEvents) mode = InputModes.Next(mode, e);
             if (raw.ModeEvents.Count > 0) ShowMode();

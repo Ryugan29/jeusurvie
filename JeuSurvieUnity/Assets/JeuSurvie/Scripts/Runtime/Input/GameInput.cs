@@ -40,6 +40,19 @@ namespace JeuSurvie.InputDevices
 
         public bool Captured => captured;
 
+        /// <summary>Mouse position in screen pixels (origin bottom-left).</summary>
+        public Vector2 PointerPosition
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM && JEUSURVIE_INPUTSYSTEM
+                return Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
+#else
+                return UnityEngine.Input.mousePosition;
+#endif
+            }
+        }
+
         public void RequestCapture()
         {
             Cursor.lockState = CursorLockMode.Locked;

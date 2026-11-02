@@ -190,6 +190,19 @@ namespace JeuSurvie.UI
 
         public void CloseSettings() => settings.style.display = DisplayStyle.None;
 
+        /// <summary>True when `panelPosition` is on a button: that click belongs to the interface, not to the game.</summary>
+        public bool IsOverControl(Vector2 panelPosition)
+        {
+            if (Root.panel == null) return false;
+            for (VisualElement e = Root.panel.Pick(panelPosition); e != null; e = e.parent)
+                if (e is Button) return true;
+            return false;
+        }
+
+        /// <summary>Mouse position in screen pixels (origin bottom-left) → coordinates of this interface.</summary>
+        public Vector2 ScreenToPanel(Vector2 screenPosition) =>
+            Root.panel == null ? screenPosition : RuntimePanelUtils.ScreenToPanel(Root.panel, new Vector2(screenPosition.x, Screen.height - screenPosition.y));
+
         public void TogglePanel() => panel.style.display = PanelVisible ? DisplayStyle.None : DisplayStyle.Flex;
 
         public void ShowMode(bool playing, bool paused)
