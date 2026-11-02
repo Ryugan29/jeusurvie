@@ -83,7 +83,7 @@ namespace JeuSurvie.Rendering
             {
                 UniversalResourceData resources = frameData.Get<UniversalResourceData>();
                 UniversalCameraData camera = frameData.Get<UniversalCameraData>();
-                if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView) return;
+                if (camera.cameraType != CameraType.Game) return; // the matrices and parameters are those of the game camera
                 if (resources.isActiveTargetBackBuffer) return;
                 if (final)
                 {
@@ -109,6 +109,7 @@ namespace JeuSurvie.Rendering
                 TextureDesc desc = renderGraph.GetTextureDesc(source);
                 desc.name = name;
                 desc.clearBuffer = false;
+                desc.msaaSamples = MSAASamples.None; // full-screen passes work on the resolved image
                 TextureHandle destination = renderGraph.CreateTexture(desc);
                 using (var builder = renderGraph.AddRasterRenderPass<PassData>(name, out PassData data))
                 {

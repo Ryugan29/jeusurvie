@@ -24,6 +24,8 @@ namespace JeuSurvie.Rendering
         public static readonly int RaysColor = Shader.PropertyToID("_RaysColor");
         public static readonly int SsrParams = Shader.PropertyToID("_SsrParams");
         public static readonly int LensParams = Shader.PropertyToID("_LensParams");
+        public static readonly int ViewProj = Shader.PropertyToID("_JS_ViewProj");
+        public static readonly int InvViewProj = Shader.PropertyToID("_JS_InvViewProj");
 
         public static Vector4 V(Rgb c, float w = 0) => new Vector4((float)c.R, (float)c.G, (float)c.B, w);
 

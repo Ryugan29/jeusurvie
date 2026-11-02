@@ -25,6 +25,8 @@ Shader "Hidden/JeuSurvie/Atmosphere"
         float4 _RaysColor;
         float4 _SsrParams;      // x wetness, y max distance m, z steps, w strength
         float4 _LensParams;     // x density, y time, z aspect, w sharpen
+        float4x4 _JS_ViewProj;      // camera view-projection of this frame (set by RenderPipelineController)
+        float4x4 _JS_InvViewProj;
 
         bool IsSky(float rawDepth)
         {
@@ -35,7 +37,7 @@ Shader "Hidden/JeuSurvie/Atmosphere"
         #endif
         }
 
-        float3 WorldAt(float2 uv, float rawDepth) { return ComputeWorldSpacePosition(uv, rawDepth, UNITY_MATRIX_I_VP); }
+        float3 WorldAt(float2 uv, float rawDepth) { return ComputeWorldSpacePosition(uv, rawDepth, _JS_InvViewProj); }
 
         float HgPhase(float mu, float g)
         {
@@ -182,7 +184,7 @@ Shader "Hidden/JeuSurvie/Atmosphere"
                 {
                     if (k >= steps) break;
                     p += R * stepLen * (1.0 + k * 0.08);
-                    float4 clip = TransformWorldToHClip(p);
+                    float4 clip = mul(_JS_ViewProj, float4(p, 1.0));
                     float2 suv = clip.xy / clip.w * 0.5 + 0.5;
                 #if UNITY_UV_STARTS_AT_TOP
                     suv.y = 1.0 - suv.y;

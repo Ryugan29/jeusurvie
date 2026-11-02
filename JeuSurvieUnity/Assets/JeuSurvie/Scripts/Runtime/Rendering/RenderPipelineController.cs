@@ -190,6 +190,10 @@ namespace JeuSurvie.Rendering
                 Color tinted = new Color(hue.r / lum, hue.g / lum, hue.b / lum) * 0.5f + Color.white * 0.5f;
                 color.colorFilter.Override(Color.Lerp(Color.white, tinted, (float)(f.Grade.Tint / 100.0)));
             }
+            // Camera matrices of this frame for the full-screen passes (GPU convention of a render texture, like URP's camera colour).
+            Matrix4x4 viewProj = GL.GetGPUProjectionMatrix(camera.projectionMatrix, true) * camera.worldToCameraMatrix;
+            Shader.SetGlobalMatrix(ShaderGlobals.ViewProj, viewProj);
+            Shader.SetGlobalMatrix(ShaderGlobals.InvViewProj, viewProj.inverse);
             AerialState a = f.Aerial;
             Shader.SetGlobalVector(ShaderGlobals.AerialFog, new Vector4((float)Math.Max(0, a.DistanceDensity), (float)Math.Max(0, a.HeightDensity), 1f / (float)Math.Max(1, a.HeightThicknessM), (float)a.HeightBaseY));
             Shader.SetGlobalVector(ShaderGlobals.AerialHaze, ShaderGlobals.V(a.Haze));

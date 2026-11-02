@@ -24,6 +24,7 @@ namespace UnityEngine.Rendering
     }
     public static class Blitter { public static void BlitTexture(RasterCommandBuffer cmd, RTHandle source, Vector4 scaleBias, Material material, int pass) { } }
     public class RTHandle { }
+    public enum MSAASamples { None = 1, MSAA2x = 2, MSAA4x = 4, MSAA8x = 8 }
     public class RasterCommandBuffer { }
     public class ContextContainer { public T Get<T>() where T : class, new() => null; }
 }
@@ -36,7 +37,7 @@ namespace UnityEngine.Rendering.RenderGraphModule
         public bool IsValid() => true;
         public static implicit operator RTHandle(TextureHandle h) => null;
     }
-    public struct TextureDesc { public string name; public bool clearBuffer; }
+    public struct TextureDesc { public string name; public bool clearBuffer; public MSAASamples msaaSamples; }
     public enum AccessFlags { Read = 1, Write = 2, ReadWrite = 3, WriteAll = 6 }
     public class RasterGraphContext { public RasterCommandBuffer cmd; }
     public delegate void BaseRenderFunc<PassData, ContextType>(PassData data, ContextType context);
