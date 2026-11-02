@@ -40,6 +40,7 @@ namespace JeuSurvie.UI
 
             panel = El("panneau");
             panel.pickingMode = PickingMode.Ignore;
+            panel.style.display = DisplayStyle.Flex; // explicit: PanelVisible compares against it (the panel shows by default, F hides it)
             fps = Text(panel, "— images/s");
             info = Text(panel, "");
             cover = Text(panel, "");
@@ -48,6 +49,7 @@ namespace JeuSurvie.UI
             Root.Add(panel);
 
             overlay = El("voile-pause");
+            overlay.style.display = DisplayStyle.Flex;
             overlayText = Text(overlay, "Cliquer pour jouer");
             overlayText.AddToClassList("texte");
             var open = new Button(() => OpenSettings()) { text = "Réglages graphiques" };
