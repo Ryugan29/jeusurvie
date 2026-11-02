@@ -44,7 +44,8 @@ namespace JeuSurvie.Tests
         }
 
         // The elf heroine brings PBR maps (relief, roughness, night glow), cut-out leaves and LOD copies: the loader must carry
-        // them onto the game's materials, build the LOD group and measure her height without the crown.
+        // them onto the game's materials, build the LOD group and measure her height without the crown. Her bark is grown in
+        // her skin (part of the body mesh and its textures), never a separate piece laid on top.
         [UnityTest]
         public IEnumerator HeroineKeepsHerMapsLodsAndHeight()
         {
@@ -68,6 +69,7 @@ namespace JeuSurvie.Tests
             Material leaves = materials["MI_Elfe_Feuilles"];
             Assert.Greater(leaves.GetFloat("_Cutoff"), 0f, "les feuilles ne sont pas découpées");
             Assert.AreEqual((float)UnityEngine.Rendering.CullMode.Off, leaves.GetFloat("_Cull"), "les feuilles ne sont pas double-face");
+            Assert.IsFalse(model.Renderers.Any(r => r.name.Contains("Ecorce")), "l'écorce doit pousser dans la peau, pas être une pièce posée dessus");
 
             LODGroup group = model.Pivot.GetComponentInChildren<LODGroup>();
             Assert.IsNotNull(group, "pas de groupe de LOD");

@@ -5,7 +5,12 @@
 import bpy, bmesh, math, random, sys, os
 from mathutils import Vector, Matrix, noise
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # appended: inspect.py next to it must not hide the stdlib's
+import ecorce  # the bark grown in the skin (zones along the muscles) and the bark images
+import previews  # the review renders
+
 SRC, OUT_DIR = sys.argv[sys.argv.index("--") + 1:][:2]
+OUT_DIR = previews.OUT_DIR = os.path.abspath(OUT_DIR)  # Blender reads relative image paths against the .blend
 os.makedirs(OUT_DIR, exist_ok=True)
 random.seed(7)
 
@@ -338,25 +343,20 @@ def blob(p, cx, cz, rx, rz, front=True):
 
 
 def body_masks(p):
-    """Per-vertex zones for a rest-pose position (T-pose, front = -y):
-    bark density (1 = almost all bark, 0.5 = half skin / half bark, 0 = skin), glow, freckles, cheek cracks."""
+    """Per-vertex zones for a rest-pose position (T-pose, front = -y): glow, freckles, cheek cracks (the bark has its
+    own zones: ecorce.py)."""
     ax = abs(p.x)
-    top = 1.585 if p.y > 0.0 else 1.535  # higher at the nape than under the chin (the face stays skin)
-    head = smooth(top - 0.03, top, p.z)
-    neck_shoulders = smooth(1.33, 1.40, p.z) * (1 - smooth(0.26, 0.34, ax))
-    hands = smooth(0.60, 0.66, ax)
-    density = (0.40 + 0.50 * neck_shoulders) * (1 - head) * (1 - 0.8 * hands)
     forearm = smooth(0.42, 0.45, ax) * (1 - smooth(0.58, 0.61, ax)) * smooth(0.2, 0.4, noise.noise(p * 30))
     cracks = blob(p, 0.050, 1.630, 0.011, 0.014)  # just on the cheekbones
     glow = max(blob(p, 0, 1.43, 0.05, 0.06), blob(p, 0, 1.715, 0.025, 0.03), blob(p, 0, 1.45, 0.06, 0.07, front=False),
                forearm * 0.8)
     freckles = max(blob(p, 0.032, 1.640, 0.022, 0.015), blob(p, 0, 1.648, 0.012, 0.012))
-    return density, glow, freckles, cracks
+    return glow, freckles, cracks
 
 
 def paint_body_masks(body):
     me = body.data
-    layers = [me.attributes.new(n, "FLOAT", "POINT") for n in ("ElfeEcorce", "ElfeLueur", "ElfeTaches", "ElfeFissures")]
+    layers = [me.attributes.new(n, "FLOAT", "POINT") for n in ("ElfeLueur", "ElfeTaches", "ElfeFissures")]
     rest = me.attributes.new("ElfeRepos", "FLOAT_VECTOR", "POINT")
     for i, v in enumerate(me.vertices):
         for layer, value in zip(layers, body_masks(v.co)):
@@ -422,32 +422,29 @@ def face_paint(n, skin, rest):
     return skin
 
 
-def body_factors(n, rest):
-    """Masks shared by colour, relief and roughness: bark islands and their rim, cheek cracks, freckles, lips, bark pattern."""
-    density = n.attr("ElfeEcorce")
-    patches = n.noise(rest, 9, detail=4, distortion=0.4)
-    edge = n.math("SUBTRACT", patches, n.math("MULTIPLY_ADD", density, -0.36, 0.66))
-    present = n.remap(density, 0.0, 0.08)
-    bark = n.math("MULTIPLY", n.remap(edge, -0.004, 0.018), present)  # crisp-edged bark islands
-    rim = n.math("MULTIPLY", n.remap(edge, -0.06, -0.004), present)  # skin darkens where the bark is pushing through
+def body_factors(n, rest, bark_images):
+    """Masks shared by colour, relief and roughness: the bark grown in the skin (where it has become bark, the skin turning
+    around it, fine fissures running on from the furrows), cheek cracks, freckles, lips, bark pattern."""
+    amount, bark_colour, furrow = ecorce.skin_bark_nodes(n, *bark_images)
+    flecks = n.math("MULTIPLY_ADD", n.noise(rest, 45, detail=3), 0.4, amount)  # a torn edge and a few islets around it
+    bark = n.remap(n.math("SUBTRACT", flecks, 0.2), 0.28, 0.4)  # from the second stratum of the relief inwards
+    turning = n.math("MULTIPLY", n.remap(amount, 0.0, 0.28), n.math("SUBTRACT", 1.0, bark))
+    fissure = n.math("MULTIPLY", turning, n.remap(furrow, 0.70, 0.90))
     crack = n.math("MULTIPLY", n.remap(n.voronoi(n.warped(rest, 60, 0.004), 110), 0.010, 0.0), n.attr("ElfeFissures"))
     keep = n.math("GREATER_THAN", n.voronoi(rest, 420, "F1", "Color"), 0.55)  # only some cells get a freckle
     freckle = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(n.voronoi(rest, 420, "F1"), 0.32, 0.18), keep), n.attr("ElfeTaches"))
-    bark_colour, furrow, fibre = bark_nodes(n.nt, rest, scale=20)
-    f = dict(bark=bark, rim=rim, crack=crack, freckle=freckle, lips=n.ellipse(rest, 0.0, 1.584, 0.022, 0.014, 1.8),
-             bark_colour=bark_colour, furrow=furrow, fibre=fibre)
+    f = dict(bark=bark, turning=turning, fissure=fissure, crack=crack, freckle=freckle,
+             lips=n.ellipse(rest, 0.0, 1.584, 0.022, 0.014, 1.8), bark_colour=bark_colour, furrow=furrow)
     f.update(outfit_factors(n, rest))
     return f
 
 
 def outfit_factors(n, rest):
-    """The painted part of the outfit (like WoW's painted armour): leather bodice on the torso, overlapping leaf scales on
-    the hips, a vine wound around each calf. Geometry pieces (belt, skirt, pads, wraps) sit on top of these."""
+    """The painted part of the outfit (like WoW's painted armour): overlapping leaf scales on the hips, under the belt, and a
+    vine wound around each calf. Geometry pieces (belt, skirt, pads, wraps) sit on top of these."""
     p = n.xyz(rest)
     ax = n.math("ABSOLUTE", p["X"])
-    torso = n.math("MULTIPLY", n.remap(p["Z"], 0.985, 1.0), n.math("SUBTRACT", 1.0, n.remap(p["Z"], 1.33, 1.36)))
-    bodice = n.math("MULTIPLY", torso, n.math("SUBTRACT", 1.0, n.remap(ax, 0.185, 0.21)))
-    hips = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(p["Z"], 0.74, 0.77), n.math("SUBTRACT", 1.0, n.remap(p["Z"], 0.955, 0.985))),
+    hips = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(p["Z"], 0.74, 0.77), n.math("SUBTRACT", 1.0, n.remap(p["Z"], 0.935, 0.955))),
                   n.math("SUBTRACT", 1.0, n.remap(ax, 0.20, 0.23)))
     angle = n.math("ARCTAN2", n.math("SUBTRACT", p["Y"], 0.05), n.math("SUBTRACT", ax, 0.111))
     turns = n.math("FRACT", n.math("MULTIPLY_ADD", p["Z"], 9.0, n.math("DIVIDE", angle, 2 * math.pi)))
@@ -457,21 +454,20 @@ def outfit_factors(n, rest):
     scales = n.vscale(rest, (14, 14, 5))
     cell = n.voronoi(scales, 1.0, "F1", "Color")
     scale_edges = n.remap(n.voronoi(scales, 1.0), 0.04, 0.0)
-    leather_grain = n.noise(rest, 90)
-    return dict(bodice=bodice, hips=hips, wrap=wrap, cell=cell, scale_edges=scale_edges, leather_grain=leather_grain)
+    return dict(hips=hips, wrap=wrap, cell=cell, scale_edges=scale_edges)
 
 
 def skin_colour(n, src, rest, f, glow):
-    """Lavender skin with a painted face, freckles and fine cheek cracks, broken by crisp-edged bark islands; then the
-    painted outfit on top (bodice, hip leaf scales, calf wraps); last, the veins and glyphs painted in vivid yellow-green so
-    they read by day too (the game's night glow then lights the same lines up)."""
+    """Lavender skin with a painted face, freckles and fine cheek cracks; where it turns into bark it greys and darkens and
+    the furrows run on into it as fine fissures, then it becomes bark; then the painted outfit on top (hip leaf scales,
+    calf wraps); last, the veins and glyphs painted in vivid yellow-green so they read by day too (the game's night glow
+    then lights the same lines up)."""
     skin = face_paint(n, skin_tone(n, src), rest)
     skin = n.mix(skin, (0.46, 0.28, 0.38, 1), n.math("MULTIPLY", f["freckle"], 0.6))
     skin = n.mix(skin, (0.22, 0.13, 0.07, 1), f["crack"])
-    skin = n.mix(skin, (0.42, 0.30, 0.40, 1), n.math("MULTIPLY", f["rim"], 0.55))
+    skin = n.mix(skin, (0.13, 0.09, 0.09, 1), n.math("MULTIPLY", f["turning"], 0.75))  # skin ~(0.3, 0.2, 0.35): duller, darker
+    skin = n.mix(skin, (0.08, 0.05, 0.04, 1), n.math("MULTIPLY", f["fissure"], 0.85))
     skin = n.mix(skin, f["bark_colour"], f["bark"])
-    leather = n.mix(LEATHER, (0.16, 0.10, 0.055, 1), f["leather_grain"])
-    skin = n.mix(skin, leather, f["bodice"])
     scales = n.mix(n.mix(LEAF_GREEN, LEAF_YOUNG, f["cell"]), (0.03, 0.08, 0.02, 1), f["scale_edges"])
     skin = n.mix(skin, scales, f["hips"])
     skin = n.mix(skin, VINE, f["wrap"])
@@ -487,10 +483,11 @@ def glow_mask(n, rest, f, width=0.024):
 
 
 def relief_height(n, rest, f):
-    """Height field for the normal map: skin grain, sunk bark furrows with fibre bumps, cheek cracks, lip lines."""
+    """Height field for the normal map (the bark's big relief is real geometry): skin grain, fine furrows and fibres of
+    the bark (in the bark image), the fissures in the turning skin, cheek cracks, lip lines."""
     grain = n.math("MULTIPLY", n.noise(rest, 350, detail=2), 0.06)
     lip_lines = n.math("MULTIPLY", f["lips"], n.math("MULTIPLY", n.noise(n.vscale(rest, (60, 1, 6)), 8), 0.25))
-    bark = n.math("MULTIPLY", f["bark"], n.math("MULTIPLY_ADD", f["furrow"], -1.0, n.math("MULTIPLY", f["fibre"], 0.3)))
+    bark = n.math("MULTIPLY_ADD", f["bark"], n.math("MULTIPLY", f["furrow"], -1.0), n.math("MULTIPLY", f["fissure"], -0.5))
     crack = n.math("MULTIPLY", f["crack"], -0.15)
     outfit = n.math("ADD", n.math("MULTIPLY", n.math("MULTIPLY", f["hips"], f["scale_edges"]), -0.25), n.math("MULTIPLY", f["wrap"], 0.35))
     return n.math("ADD", n.math("ADD", grain, lip_lines), n.math("ADD", n.math("ADD", bark, crack), outfit))
@@ -502,19 +499,19 @@ def roughness_value(n, f, glow):
     r = n.mix_value(r, 0.38, f["lips"])
     r = n.mix_value(r, 0.88, f["bark"])
     r = n.mix_value(r, 0.97, n.math("MULTIPLY", f["bark"], f["furrow"]))
-    r = n.mix_value(r, 0.75, f["bodice"])
+    r = n.mix_value(r, 0.80, n.math("MULTIPLY", f["turning"], 0.6))
     r = n.mix_value(r, 0.70, f["hips"])
     r = n.mix_value(r, 0.80, f["wrap"])
     return n.mix_value(r, 0.40, glow)
 
 
-def body_material(body):
+def body_material(body, bark_images):
     nt = body.data.materials[0].node_tree
     n = Nodes(nt)
     bsdf = next(x for x in nt.nodes if x.type == "BSDF_PRINCIPLED")
     src = bsdf.inputs["Base Color"].links[0].from_socket
     rest = n.attr("ElfeRepos", "Vector")
-    f = body_factors(n, rest)
+    f = body_factors(n, rest, bark_images)
     glow = glow_mask(n, rest, f)
     day_lines = glow_mask(n, rest, f, width=VEIN_DAY_WIDTH)  # a bit wider than the light: still readable from the game camera
     n.link(skin_colour(n, src, rest, f, day_lines), bsdf.inputs["Base Color"])
@@ -670,112 +667,6 @@ def tint_hair_and_eyes():
     eye_material()
 
 
-# --- Preview renders (arms lowered for the picture only; the exported model stays in T-pose)
-def lower_arms(arm, angle_deg=72):
-    bpy.context.view_layer.update()
-    for name, s in (("upperarm_l", 1), ("upperarm_r", -1)):
-        pb, b = arm.pose.bones[name], arm.data.bones[name]
-        rest = b.matrix_local.to_3x3()
-        world_rot = Matrix.Rotation(math.radians(angle_deg) * s, 3, "Y")
-        pb.rotation_mode = "QUATERNION"
-        pb.rotation_quaternion = (rest.inverted() @ world_rot @ rest).to_quaternion()
-    bpy.context.view_layer.update()
-
-
-def setup_scene():
-    sc = bpy.context.scene
-    try:
-        sc.render.engine = "BLENDER_EEVEE"
-    except TypeError:
-        sc.render.engine = "BLENDER_EEVEE_NEXT"
-    sc.render.resolution_x, sc.render.resolution_y = 700, 1000
-    sc.view_settings.view_transform = "AgX"
-    w = bpy.data.worlds.new("Ciel"); sc.world = w
-    w.node_tree.nodes["Background"].inputs[0].default_value = (0.78, 0.84, 0.76, 1)
-    w.node_tree.nodes["Background"].inputs[1].default_value = 0.9
-    for name, energy, rot in (("Soleil", 3.2, (50, 0, -35)), ("Contre", 2.0, (60, 0, 160))):
-        l = bpy.data.objects.new(name, bpy.data.lights.new(name, "SUN"))
-        l.data.energy, l.rotation_euler = energy, [math.radians(a) for a in rot]
-        l.data.angle = math.radians(8)  # soft shadows: no jagged hair shadows on the face in the previews
-        sc.collection.objects.link(l)
-    cam = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera"))
-    sc.collection.objects.link(cam); sc.camera = cam
-    return cam
-
-
-def aim(cam, eye, target, lens):
-    cam.location, cam.data.lens = eye, lens
-    cam.rotation_euler = (Vector(target) - Vector(eye)).to_track_quat("-Z", "Y").to_euler()
-
-
-def render(path):
-    bpy.context.scene.render.filepath = path
-    bpy.ops.render.render(write_still=True)
-
-
-def compose(paths, out):
-    import numpy as np
-    imgs = [bpy.data.images.load(p) for p in paths]
-    w, h = imgs[0].size
-    canvas = np.zeros((h, w * len(imgs), 4), dtype=np.float32)
-    for i, im in enumerate(imgs):
-        px = np.empty(w * h * 4, dtype=np.float32); im.pixels.foreach_get(px)
-        canvas[:, i * w:(i + 1) * w] = px.reshape(h, w, 4)
-    res = bpy.data.images.new("planche", w * len(imgs), h, alpha=True)
-    res.pixels.foreach_set(canvas.ravel()); res.filepath_raw, res.file_format = out, "PNG"; res.save()
-
-
-def render_previews(cam):
-    views = (("face", (0, -3.2, 1.15)), ("trois-quarts", (2.2, -2.3, 1.2)), ("dos", (0.2, 3.2, 1.2)))
-    paths = []
-    for name, eye in views:
-        aim(cam, eye, (0, 0, 0.98), 50)
-        paths.append(os.path.join(OUT_DIR, f"vue-{name}.png")); render(paths[-1])
-    compose(paths, os.path.join(OUT_DIR, "planche-corps.png"))
-    heads = []
-    for name, eye, target, lens in (("tete-face", (0.15, -0.95, 1.72), (0, 0, 1.70), 60),
-                                    ("tete-profil", (0.85, -0.55, 1.74), (0, 0, 1.70), 60),
-                                    ("visage-poitrine", (0.05, -0.80, 1.58), (0, 0, 1.56), 70),
-                                    ("portrait", (0.0, -0.50, 1.640), (0, 0, 1.628), 85),
-                                    ("portrait-34", (0.30, -0.42, 1.645), (0, 0, 1.628), 85)):
-        aim(cam, eye, target, lens)
-        heads.append(os.path.join(OUT_DIR, f"vue-{name}.png")); render(heads[-1])
-    compose(heads[:3], os.path.join(OUT_DIR, "planche-tete.png"))
-    compose(heads[3:], os.path.join(OUT_DIR, "planche-portrait.png"))
-    before = os.path.join(OUT_DIR, "avant-visage.png")  # optional earlier render kept by hand, for a before/after sheet
-    if os.path.exists(before):
-        compose([before, heads[0]], os.path.join(OUT_DIR, "planche-avant-apres.png"))
-
-
-def go_night(glow_boost=5.0):
-    """Moonlight scene; the glow mask is pushed up like the game's night glow (strong at night, soft by day)."""
-    sc = bpy.context.scene
-    sc.world.node_tree.nodes["Background"].inputs[0].default_value = (0.02, 0.03, 0.06, 1)
-    sc.world.node_tree.nodes["Background"].inputs[1].default_value = 0.5
-    for name, energy in (("Soleil", 0.25), ("Contre", 0.35)):
-        light = bpy.data.objects[name].data
-        light.energy, light.color = energy, (0.55, 0.65, 1.0)
-    for o, mat_index in ((bpy.data.objects["Superhero_Female"], 0), (bpy.data.objects["Eyes"], 0)):
-        nt = o.data.materials[mat_index].node_tree
-        bsdf = next(x for x in nt.nodes if x.type == "BSDF_PRINCIPLED")
-        sock = bsdf.inputs["Emission Strength"]
-        if sock.links:
-            boost = nt.nodes.new("ShaderNodeMath"); boost.operation = "MULTIPLY"; boost.inputs[1].default_value = glow_boost
-            nt.links.new(sock.links[0].from_socket, boost.inputs[0]); nt.links.new(boost.outputs[0], sock)
-        else:
-            sock.default_value *= glow_boost
-
-
-def render_night(cam):
-    shots = []
-    for name, eye, target, lens in (("nuit-face", (0, -3.2, 1.15), (0, 0, 0.98), 50),
-                                    ("nuit-dos", (0.2, 3.2, 1.2), (0, 0, 0.98), 50),
-                                    ("nuit-visage", (0.05, -0.80, 1.58), (0, 0, 1.56), 70)):
-        aim(cam, eye, target, lens)
-        shots.append(os.path.join(OUT_DIR, f"vue-{name}.png")); render(shots[-1])
-    compose(shots, os.path.join(OUT_DIR, "planche-nuit.png"))
-
-
 # ====================================================================================================================
 # Chantiers C and D: painted textures (leaf, hair, seed), leaf cards, outfit, long hair, LODs and the glTF export.
 # ====================================================================================================================
@@ -913,19 +804,20 @@ def skin_like_body(o, body, arm, head_share=None):
     o.modifiers.new("Armature", "ARMATURE").object = arm
 
 
-def section(body, z, keep=lambda co: True, dz=0.012):
-    """Body vertices within dz of height z (the slab is widened until it holds some points)."""
+def section(outline, z, keep=lambda co: True, dz=0.012):
+    """Points of the body's outline (its vertices before the bark densified the skin, so their spread stays even)
+    within dz of height z (the slab is widened until it holds some points)."""
     pts = []
     while not pts:
-        pts = [v.co for v in body.data.vertices if abs(v.co.z - z) < dz and keep(v.co)]
+        pts = [co for co in outline if abs(co.z - z) < dz and keep(co)]
         dz *= 2
     centre = sum(pts, Vector()) / len(pts)
     return pts, centre
 
 
-def ring_points(body, z, count, pad, keep=lambda co: True, phase=0.0):
+def ring_points(outline, z, count, pad, keep=lambda co: True, phase=0.0):
     """Points around the body at height z, `pad` metres outside the skin, evenly spread in angle."""
-    pts, centre = section(body, z, keep)
+    pts, centre = section(outline, z, keep)
     out = []
     for k in range(count):
         a = 2 * math.pi * (k + phase) / count
@@ -937,19 +829,19 @@ def ring_points(body, z, count, pad, keep=lambda co: True, phase=0.0):
 
 
 # --- Outfit: leather belt, two rows of leaf skirt, leaf shoulder pads, vine necklace with glowing seeds, calf wraps
-def make_outfit(arm, body, leaf_img):
+def make_outfit(arm, body, leaf_img, outline):
     leather = flat_material("MI_Elfe_Tenue_Cuir", LEATHER); leather.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.75
     vine = flat_material("MI_Elfe_Lianes", VINE)
     skirt_mat = card_material("MI_Elfe_Tenue_Feuilles", leaf_img, tint=0.72)
     pieces = []
 
-    belt, _ = ring_points(body, 0.962, 40, 0.012)
+    belt, _ = ring_points(outline, 0.962, 40, 0.012)
     pieces.append(tube_mesh("Elfe_Ceinture", [[(p, 0.012) for p in belt + belt[:1]]], bevel_res=2))
     pieces[-1].data.materials.append(leather)
 
     def skirt(bm, uv):
         for z, count, size, phase in ((0.955, 26, 0.25, 0.0), (0.985, 26, 0.21, 0.5)):
-            ring, centre = ring_points(body, z, count, 0.008, phase=phase)
+            ring, centre = ring_points(outline, z, count, 0.008, phase=phase)
             for p in ring:
                 outward = Vector((p.x - centre.x, p.y - centre.y, 0)).normalized()
                 d = outward * random.uniform(0.25, 0.4) + Vector((0, 0, -1))
@@ -964,9 +856,9 @@ def make_outfit(arm, body, leaf_img):
                 leaf_card(bm, uv, base, d, random.uniform(0.15, 0.19), random.uniform(-0.2, 0.2), width_ratio=0.5)
     pieces.append(cards_object("Elfe_Epaulettes", skirt_mat, shoulders))
 
-    neck, neck_c = ring_points(body, 1.475, 32, 0.004, keep=lambda co: abs(co.x) < 0.09)  # the neck only, not the T-posed arms
+    neck, neck_c = ring_points(outline, 1.475, 32, 0.004, keep=lambda co: abs(co.x) < 0.09)  # the neck only, not the T-posed arms
     front = min(neck, key=lambda p: p.y)
-    chest, _ = section(body, 1.40, keep=lambda co: abs(co.x) < 0.05)
+    chest, _ = section(outline, 1.40, keep=lambda co: abs(co.x) < 0.05)
     chest_y = min(p.y for p in chest)
     seeds = [Vector((0, chest_y - 0.012, 1.392)), Vector((0.034, chest_y - 0.008, 1.408)), Vector((-0.034, chest_y - 0.008, 1.408))]
     strands = [[(p, 0.0035) for p in neck + neck[:1]]] + [[(front, 0.0025), (Vector((s.x, s.y + 0.004, s.z + 0.012)), 0.0025)] for s in seeds]
@@ -993,7 +885,7 @@ def make_outfit(arm, body, leaf_img):
             t = i / 45
             z = 0.12 + 0.33 * t
             a = t * 3 * 2 * math.pi
-            leg, c = section(body, z, keep=lambda co, s=s: co.x * s > 0.03)
+            leg, c = section(outline, z, keep=lambda co, s=s: co.x * s > 0.03)
             r = max(((p - c).xy.length for p in leg if abs(math.atan2((p - c).y, (p - c).x) - a + math.pi) % (2 * math.pi) - math.pi < 0.5), default=0.06)
             pts.append((Vector((c.x + math.cos(a) * (r + 0.005), c.y + math.sin(a) * (r + 0.005), z)), 0.0055))
         wraps.append(pts)
@@ -1179,8 +1071,12 @@ def main():
         refine_face(part)
         sculpt_face(part)
         recompute_shading(part)
+    outline = [v.co.copy() for v in body.data.vertices]  # the outfit is fitted on these, as before the bark grew
+    bark_colour, bark_height, height = ecorce.paint_bark(OUT_DIR)
+    ecorce.grow_bark(body, arm, height)
+    recompute_shading(body)
     paint_body_masks(body)
-    bsdf = body_material(body)
+    bsdf = body_material(body, (bark_colour, bark_height))
     use_baked_body(body, bake_body(body, bsdf))
     body.data.materials[0].name = "MI_Elfe_Corps"
     tint_hair_and_eyes()
@@ -1192,7 +1088,7 @@ def main():
     crown.data.materials[0] = uv_bark_material("MI_Elfe_Bois")
     bake_simple(crown, "T_Elfe_Bois", 1024, with_normal=True)
     make_eyebrows(arm)
-    make_outfit(arm, body, leaf_img)
+    make_outfit(arm, body, leaf_img, outline)
     make_long_hair(arm, body, hair_img, leaf_img)
     strip_extra_uvs([body, lashes, bpy.data.objects["Eyes"]])
     lod0 = [o for o in bpy.data.objects if o.type == "MESH"]
@@ -1200,11 +1096,13 @@ def main():
     make_lods([body, hair_cap, crown])
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT_DIR, "elfe.blend"))
     export_gltf(os.path.join(OUT_DIR, "export", "heroine.gltf"))
-    cam = setup_scene()
-    lower_arms(arm)
-    render_previews(cam)
-    go_night()
-    render_night(cam)
+    cam = previews.setup_scene()
+    previews.lower_arms(arm)
+    previews.render_previews(cam)
+    previews.render_belly()
+    previews.render_flex(arm)
+    previews.go_night()
+    previews.render_night(cam)
 
 
 main()
