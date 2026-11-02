@@ -18,7 +18,7 @@ Shader "JeuSurvie/Sky"
             #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
-            #pragma shader_feature_local _CLOUDS_FLAT _CLOUDS_LAYERED _CLOUDS_VOLUMETRIC
+            #pragma multi_compile_local _CLOUDS_FLAT _CLOUDS_LAYERED _CLOUDS_VOLUMETRIC
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             float4 _SkyZenith, _SkyHorizon, _SkyHaze;   // linear rgb

@@ -94,6 +94,7 @@ namespace JeuSurvie.EditorTools
             QualitySettings.SetQualityLevel(current, false);
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.enableFrameTimingStats = true;
+            KeepRuntimeShaderVariants();
 
             var setup = AssetDatabase.LoadAssetAtPath<RenderSetup>(SetupPath);
             if (setup == null)
@@ -127,6 +128,23 @@ namespace JeuSurvie.EditorTools
             EditorBuildSettings.scenes = scenes.ToArray();
             if (SceneManager.GetActiveScene().path != ScenePath) EditorSceneManager.OpenScene(ScenePath);
             Debug.Log("[JeuSurvie] Projet configuré : URP, fonctionnalités de rendu, scène principale. Lancer avec Play.");
+        }
+
+        /// <summary>
+        /// Every material is created at runtime, so a build sees none of them: keep the GPU instancing variants (vegetation drawn
+        /// with RenderMeshInstanced) and every fog mode (fog is switched on by SceneLighting, never in the scene).
+        /// </summary>
+        public static void KeepRuntimeShaderVariants()
+        {
+            const int keepAllInstancingVariants = 2, customFogStripping = 1;
+            var so = new SerializedObject(GraphicsSettings.GetGraphicsSettings());
+            Set(so, "m_InstancingStripping", keepAllInstancingVariants);
+            Set(so, "m_FogStripping", customFogStripping);
+            Set(so, "m_FogKeepLinear", true);
+            Set(so, "m_FogKeepExp", true);
+            Set(so, "m_FogKeepExp2", true);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            AssetDatabase.SaveAssets();
         }
 
         private static T FindFeature<T>(ScriptableRendererData data) where T : ScriptableRendererFeature
