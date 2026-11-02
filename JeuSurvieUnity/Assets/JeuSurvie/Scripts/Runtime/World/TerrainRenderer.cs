@@ -83,7 +83,7 @@ namespace JeuSurvie.World
             mesh.normals = normals;
             mesh.colors = colors;
             mesh.SetUVs(0, layers);
-            mesh.SetIndices(data.Indices, MeshTopology.Triangles, 0, true);
+            mesh.SetIndices(UnityWinding.FromCore(data.Indices), MeshTopology.Triangles, 0, true);
             mesh.UploadMeshData(true);
             var go = new GameObject("chunk " + key);
             go.transform.SetParent(root, false);

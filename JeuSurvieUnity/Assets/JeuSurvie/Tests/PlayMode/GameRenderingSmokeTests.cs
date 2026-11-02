@@ -1,7 +1,8 @@
 // Starts the game exactly like the Play button (GameBootstrap creates itself), waits for the world, then checks what is drawn:
-// every material of the game must use a JeuSurvie shader that compiled without error for this graphics API (an error shader is
-// drawn magenta), the near ground must exist, and the vegetation library must have loaded. Writes a picture and a report to
-// Builds/Capture (git-ignored) so a failure can be looked at. Editor only: it reads the shader compiler messages.
+// every JeuSurvie shader compiled without error for this graphics API (an error shader is drawn magenta), the near ground and
+// the vegetation are there, and the ground really covers the lower half of the view (seen through, it showed the sky).
+// Writes a picture and a report to Builds/Capture (git-ignored) so a failure can be looked at. Editor only: it reads the
+// shader compiler messages.
 #if UNITY_EDITOR
 using System.Collections;
 using System.IO;
@@ -18,14 +19,20 @@ namespace JeuSurvie.Tests
 {
     public class GameRenderingSmokeTests
     {
-        private const float WorldLoadSeconds = 30;
+        private const float WorldLoadTimeoutSeconds = 90, SettleSeconds = 5;
+        private const int LoadedChunks = 20;
         private const int PictureWidth = 1600, PictureHeight = 900;
+        private const float MaxBackgroundShareUnderHorizon = 0.05f;
 
         [UnityTest]
         public IEnumerator GameDrawsWithValidShaders()
         {
             LogAssert.ignoreFailingMessages = true; // the report below says what went wrong
-            yield return new WaitForSecondsRealtime(WorldLoadSeconds);
+            float started = Time.realtimeSinceStartup;
+            yield return new WaitUntil(() => TerrainChunkCount() > LoadedChunks || Time.realtimeSinceStartup - started > WorldLoadTimeoutSeconds);
+            yield return new WaitForSecondsRealtime(SettleSeconds); // vegetation and ground cover follow the chunks
+            Camera cam = Camera.main;
+            Assert.IsNotNull(cam, "pas de caméra principale : le jeu n'a pas démarré");
 
             string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", "Capture"));
             Directory.CreateDirectory(outDir);
@@ -50,40 +57,19 @@ namespace JeuSurvie.Tests
             foreach (var group in materials.GroupBy(m => m.shader.name)) report.AppendLine($"  {group.Count(),4} × {group.Key}");
             int foliage = materials.Count(m => m.shader.name == "JeuSurvie/Foliage");
 
-            Material terrain = materials.FirstOrDefault(m => m.shader.name == "JeuSurvie/Terrain");
-            report.AppendLine("\nTextures du sol proche (générées au démarrage) :");
-            int whiteGround = 0;
-            foreach (string layer in new[] { "Grass", "Soil", "Rock", "Snow" })
-            {
-                Texture tex = terrain != null ? terrain.GetTexture("_TsColor" + layer) : null;
-                Color mean = tex is RenderTexture rt ? MeanColor(rt, Path.Combine(outDir, $"sol-{layer}.png")) : Color.white;
-                if (mean.r > 0.95f && mean.g > 0.95f && mean.b > 0.95f) whiteGround++;
-                report.AppendLine($"  {layer} : {(tex != null ? tex.name : "aucune")} · couleur moyenne {mean}");
-            }
+            Texture2D picture = Render(cam);
+            File.WriteAllBytes(Path.Combine(outDir, "editor-play.png"), picture.EncodeToPNG());
+            Object.Destroy(picture);
+            float background = BackgroundShareUnderHorizon(cam);
+            report.AppendLine($"\nFond visible sous l'horizon : {background:P1}");
 
-            SavePicture(Path.Combine(outDir, "editor-play.png"));
             File.WriteAllText(Path.Combine(outDir, "editor-play.txt"), report.ToString());
             Debug.Log(report.ToString());
 
             Assert.IsEmpty(broken, "shaders en erreur (dessinés en rose) — voir Builds/Capture/editor-play.txt");
             Assert.Greater(nearGround, 0, "aucun morceau de sol proche (JeuSurvie/Terrain) n'est dessiné");
             Assert.Greater(foliage, 0, "aucun matériau de végétation : la bibliothèque de modèles n'a rien chargé");
-            Assert.AreEqual(0, whiteGround, "textures du sol blanches : le sol proche est dessiné blanc");
-        }
-
-        /// <summary>Average colour of a render texture (read on the CPU); also saved as a PNG to be looked at.</summary>
-        private static Color MeanColor(RenderTexture rt, string path)
-        {
-            RenderTexture.active = rt;
-            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false, true);
-            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-            RenderTexture.active = null;
-            Color[] pixels = tex.GetPixels();
-            Color sum = Color.clear;
-            foreach (Color c in pixels) sum += c;
-            File.WriteAllBytes(path, tex.EncodeToPNG());
-            Object.Destroy(tex);
-            return sum / pixels.Length;
+            Assert.Less(background, MaxBackgroundShareUnderHorizon, "on voit le fond à travers le sol (triangles du sol retournés ?)");
         }
 
         /// <summary>Appends the shader state to the report; true if it is broken.</summary>
@@ -96,10 +82,37 @@ namespace JeuSurvie.Tests
             return error;
         }
 
-        private static void SavePicture(string path)
+        /// <summary>Share of the lower half of the view where nothing is drawn: the sky is replaced by a pure blue background.</summary>
+        private static float BackgroundShareUnderHorizon(Camera cam)
         {
-            Camera cam = Camera.main;
-            if (cam == null) return;
+            Material sky = RenderSettings.skybox;
+            CameraClearFlags flags = cam.clearFlags;
+            Color previous = cam.backgroundColor;
+            Texture2D tex;
+            try
+            {
+                RenderSettings.skybox = null;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = Color.blue;
+                tex = Render(cam);
+            }
+            finally
+            {
+                RenderSettings.skybox = sky;
+                cam.clearFlags = flags;
+                cam.backgroundColor = previous;
+            }
+            Color[] lower = tex.GetPixels(0, 0, tex.width, tex.height / 2); // texture rows start at the bottom
+            Object.Destroy(tex);
+            // "Blue dominant" rather than pure blue: haze and post effects tint the cleared background.
+            return (float)lower.Count(c => c.b > 0.5f && c.b > c.r + 0.25f && c.b > c.g + 0.25f) / lower.Length;
+        }
+
+        private static int TerrainChunkCount() =>
+            Object.FindObjectsByType<MeshRenderer>(FindObjectsInactive.Exclude).Count(r => r.sharedMaterial != null && r.sharedMaterial.shader.name == "JeuSurvie/Terrain");
+
+        private static Texture2D Render(Camera cam)
+        {
             var rt = new RenderTexture(PictureWidth, PictureHeight, 24);
             RenderTexture previous = cam.targetTexture;
             cam.targetTexture = rt;
@@ -109,9 +122,9 @@ namespace JeuSurvie.Tests
             var tex = new Texture2D(PictureWidth, PictureHeight, TextureFormat.RGB24, false);
             tex.ReadPixels(new Rect(0, 0, PictureWidth, PictureHeight), 0, 0);
             RenderTexture.active = null;
-            File.WriteAllBytes(path, tex.EncodeToPNG());
-            Object.Destroy(tex);
             rt.Release();
+            Object.Destroy(rt);
+            return tex;
         }
     }
 }

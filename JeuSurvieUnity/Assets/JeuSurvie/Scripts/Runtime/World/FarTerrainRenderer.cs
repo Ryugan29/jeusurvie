@@ -85,7 +85,7 @@ namespace JeuSurvie.World
             mesh.vertices = vertices;
             mesh.normals = normals;
             mesh.colors = colors;
-            mesh.SetIndices(m.Indices, MeshTopology.Triangles, 0, true);
+            mesh.SetIndices(UnityWinding.FromCore(m.Indices), MeshTopology.Triangles, 0, true);
             mesh.UploadMeshData(true);
             if (filter.sharedMesh != null) UnityEngine.Object.Destroy(filter.sharedMesh);
             filter.sharedMesh = mesh;
