@@ -2,8 +2,9 @@
 // pick up the starter tools on the bench, fell the camp's tree, break its rock, mine copper and iron, scythe tall grass,
 // pick herbs and flowers, hoe the loose soil — through the same keys a player uses (E, left button, 1–8), never the real
 // mouse. Pictures of each step go to Builds/Capture/recolte-*.png for the visual check, and every gesture, her walk and her
-// run (empty-handed, then carrying a tool) are filmed frame by frame (recolte-film-<name>-NN.png). Hold times follow the
-// gestures' durations (HarvestData.Gestures): blows needed × duration.
+// run (empty-handed, then carrying a tool) are filmed frame by frame (recolte-film-<name>-NN.png). Unfilmed hold times
+// follow the gestures' durations (HarvestData.Gestures): blows needed × duration; filmed ones last until the work is done
+// (saving the pictures stalls the game's clock).
 #if UNITY_EDITOR
 using System.Collections;
 using System.IO;
@@ -78,13 +79,21 @@ namespace JeuSurvie.Tests
 
         private static float DurationOf(Gesture g) => (float)HarvestData.Gestures[g].DurationS;
 
-        /// <summary>Holds the tool for `totalS` seconds in all, filming `frames` pictures `everyS` apart from the start.</summary>
-        private IEnumerator HoldFilmed(float totalS, string film, int frames, float everyS)
+        /// <summary>Holds the tool until `done` (at most `timeoutS`), filming `frames` pictures `everyS` apart from the start,
+        /// and lets go as soon as it is done (no blow on what is left). Not a fixed time: a picture takes up to half a second
+        /// to save, and the game's clock catches up only a few steps of each long frame (GameSession.MaxStepsPerFrame).</summary>
+        private IEnumerator HoldFilmed(System.Func<bool> done, float timeoutS, string film, int frames, float everyS)
         {
             float start = Time.realtimeSinceStartup;
             game.TestInput.UseHeld = true;
-            yield return Film(film, frames, everyS);
-            yield return new WaitForSecondsRealtime(Mathf.Max(0, totalS - (Time.realtimeSinceStartup - start)));
+            for (int i = 0; i < frames; i++)
+            {
+                float t = Time.realtimeSinceStartup;
+                Snap($"film-{film}-{i:00}");
+                if (done()) game.TestInput.UseHeld = false;
+                yield return new WaitForSecondsRealtime(Mathf.Max(0, everyS - (Time.realtimeSinceStartup - t)));
+            }
+            yield return new WaitUntil(() => done() || Time.realtimeSinceStartup - start > timeoutS);
             game.TestInput.UseHeld = false;
             yield return new WaitForSecondsRealtime(0.3f);
         }
@@ -159,7 +168,7 @@ namespace JeuSurvie.Tests
             Assert.AreEqual(TargetStatus.Ok, g.State.Target.Status, "l'arbre est visé et peut être abattu");
             yield return SnapWithInterface("2-hache-en-main");
             float chop = DurationOf(Gesture.Chop);
-            yield return HoldFilmed(5.6f * chop, "hache", 12, chop / 11); // 6 blows; released before a 7th starts on the stump
+            yield return HoldFilmed(() => g.State.World[tree.Id].Phase == NodePhase.Stump, 20 * chop, "hache", 12, chop / 11); // 6 blows
             yield return Face(tree);
             Assert.That(Count("wood"), Is.InRange(4, 6), "bûches reçues");
             Assert.AreEqual(NodePhase.Stump, g.State.World[tree.Id].Phase);
@@ -173,7 +182,7 @@ namespace JeuSurvie.Tests
             Harvestable rock = Camp(HarvestKind.Rock);
             yield return Face(rock, 0.5, true);
             float strike = DurationOf(Gesture.Overhead);
-            yield return HoldFilmed(9 * strike + 0.5f, "pioche", 12, strike / 11); // 3 stages × 3 blows of a stone pickaxe
+            yield return HoldFilmed(() => g.State.World[rock.Id].Phase == NodePhase.Depleted, 25 * strike, "pioche", 12, strike / 11); // 3 stages × 3 blows of a stone pickaxe
             Assert.GreaterOrEqual(Count("stone"), 6, "pierres reçues");
             Assert.AreEqual(NodePhase.Depleted, g.State.World[rock.Id].Phase);
             Harvestable iron = Camp(HarvestKind.IronOre);
@@ -192,7 +201,7 @@ namespace JeuSurvie.Tests
             yield return Equip("sickle_stone");
             yield return Face(Camp(HarvestKind.TallGrass), 0.6, true);
             float sweep = DurationOf(Gesture.Sweep);
-            yield return HoldFilmed(sweep + 0.2f, "faucille", 14, sweep / 13);
+            yield return HoldFilmed(() => Count("fibre") >= 2, 8 * sweep, "faucille", 14, sweep / 13);
             Assert.GreaterOrEqual(Count("fibre"), 2, "fibres reçues");
             yield return Press(GameKey.Hotbar1 + g.State.Items.Hotbar.CellOf(g.State.Items.Equipped), 0.3f); // put the sickle away
             Assert.AreEqual(0, g.State.Items.Equipped);
@@ -202,10 +211,14 @@ namespace JeuSurvie.Tests
             {
                 yield return Face(Camp(k), 0.6, true);
                 Gesture gesture = HarvestData.Rules[k].Gesture;
-                float d = DurationOf(gesture) + 0.25f;
+                string item = HarvestData.Rules[k].PerStage.ItemId;
+                int before = Count(item);
+                float d = DurationOf(gesture) + 0.25f, started = Time.realtimeSinceStartup;
                 game.TestInput.Pressed.Add(GameKey.Gather);
-                if (k == HarvestKind.FlowerGold) yield return new WaitForSecondsRealtime(d);
-                else yield return Film(k == HarvestKind.Herb ? "arracher" : k == HarvestKind.FlowerRose ? "cueillette" : "ramasser", 14, d / 14);
+                if (k != HarvestKind.FlowerGold) yield return Film(k == HarvestKind.Herb ? "arracher" : k == HarvestKind.FlowerRose ? "cueillette" : "ramasser", 14, d / 14);
+                // Done when it is in the bag (filming stalls the game's clock: not a fixed time), then the gesture ends.
+                yield return new WaitUntil(() => Count(item) > before || Time.realtimeSinceStartup - started > 6 * d);
+                yield return new WaitForSecondsRealtime(d);
             }
             Assert.GreaterOrEqual(Count("herb"), 1);
             Assert.GreaterOrEqual(Count("flower_rose"), 1);
@@ -217,7 +230,7 @@ namespace JeuSurvie.Tests
             Harvestable soil = Camp(HarvestKind.Soil);
             yield return Face(soil, 0.6, true);
             float dig = DurationOf(Gesture.Dig);
-            yield return HoldFilmed(2 * dig + 0.3f, "houe", 12, dig / 11); // 2 blows of a stone hoe
+            yield return HoldFilmed(() => g.State.World[soil.Id].Phase == NodePhase.Tilled, 10 * dig, "houe", 12, dig / 11); // 2 blows of a stone hoe
             Assert.GreaterOrEqual(Count("root"), 1, "racines reçues");
             Assert.AreEqual(NodePhase.Tilled, g.State.World[soil.Id].Phase);
             yield return new WaitForSecondsRealtime(0.5f);

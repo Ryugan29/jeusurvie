@@ -71,3 +71,36 @@ def frames(action, loop=False, first=None, last=None):
     f0 = f0 if first is None else first
     f1 = f1 if last is None else last
     return list(range(f0, f1 if loop else f1 + 1))
+
+
+BLEND = 6  # frames blended at each joint between two segments
+
+
+def joined_frames(action, segments, loop):
+    """Source frames of the joined clip, and the indices where a new segment starts. segments: source clip indices
+    (0 = the source's first frame), (first, last[, step]), joined in order."""
+    if not segments:
+        return frames(action, loop=loop), []
+    f0 = int(round(action.frame_range[0]))
+    out, joints = [], []
+    for seg in segments:
+        first, last = seg[0], seg[1]
+        step = seg[2] if len(seg) > 2 else 1
+        if out:
+            joints.append(len(out))
+        out += [f0 + i for i in range(first, last + (1 if step > 0 else -1), step)]
+    return out, joints
+
+
+def blend_joints(bases, joints, width=BLEND):
+    """The last frames before each joint drift toward the first pose after it (no pop between segments)."""
+    out = [dict(b) for b in bases]
+    for j in joints:
+        target = bases[j]
+        for k in range(width):
+            i = j - width + k
+            if i < 0:
+                continue
+            t = (k + 1) / (width + 1)
+            out[i] = {n: (q.slerp(target[n][0], t), loc.lerp(target[n][1], t)) for n, (q, loc) in bases[i].items()}
+    return out

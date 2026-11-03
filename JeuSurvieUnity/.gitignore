@@ -29,7 +29,7 @@
 !/Tools~/UnityCompileCheck/UnityCompileCheck.csproj
 # Blender character build: generated renders, bakes and exports (rebuilt by Tools~/Blender/build_elfe.py)
 /Tools~/Blender/sortie/
-/Tools~/Blender/__pycache__/
+/Tools~/Blender/**/__pycache__/
 # Backups of the original CC0 models (like StreamingAssets/assets, not versioned)
 /Tools~/Sauvegardes/
 # Free sources downloaded for the Blender builds, not versioned: Poly Haven textures and Quaternius animations (CC0),

@@ -15,6 +15,35 @@ using UnityEngine.Rendering;
 
 namespace JeuSurvie.Characters
 {
+    /// <summary>A fist closed on a handle, in its hand bone's space: its middle (under the knuckles, toward the palm — the
+    /// thumb's side — not on the back of the hand), the handle across it (pinky → index) and where the fist points.</summary>
+    public readonly struct Fist
+    {
+        public readonly Vector3 Centre, Handle, Forward;
+
+        private Fist(Vector3 centre, Vector3 handle, Vector3 forward) { Centre = centre; Handle = handle; Forward = forward; }
+
+        /// <summary>Her right (side "r") or left ("l") fist; false without that hand or one of its fingers.</summary>
+        public static bool TryOf(AnimatedModel heroine, string side, out Transform hand, out Fist fist)
+        {
+            fist = default;
+            var knuckles = new Vector3[4];
+            string[] fingers = { "index", "pinky", "middle", "thumb" };
+            if (!heroine.Nodes.TryGetValue("hand_" + side, out hand)) return false;
+            for (int i = 0; i < fingers.Length; i++)
+            {
+                if (!heroine.Nodes.TryGetValue(fingers[i] + "_01_" + side, out Transform t)) { hand = null; return false; }
+                knuckles[i] = hand.InverseTransformPoint(t.position);
+            }
+            Vector3 index = knuckles[0], pinky = knuckles[1], middle = knuckles[2], thumb = knuckles[3];
+            Vector3 handle = (index - pinky).normalized;
+            Vector3 forward = Vector3.ProjectOnPlane(middle, handle).normalized;
+            Vector3 palm = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(thumb, handle), forward).normalized;
+            fist = new Fist(middle * 0.85f + palm * (middle.magnitude * 0.3f), handle, forward);
+            return true;
+        }
+    }
+
     public sealed class ToolInHand
     {
         private readonly Transform hand;
@@ -31,16 +60,10 @@ namespace JeuSurvie.Characters
         public ToolInHand(AnimatedModel heroine, ModelLibrary objects)
         {
             this.objects = objects;
-            heroine.Nodes.TryGetValue("hand_r", out hand);
-            if (hand == null) { Debug.LogWarning("[JeuSurvie] Main droite introuvable : les outils ne seront pas tenus."); return; }
-            Vector3 Local(string bone) => heroine.Nodes.TryGetValue(bone, out Transform t) ? hand.InverseTransformPoint(t.position) : Vector3.zero;
-            Vector3 index = Local("index_01_r"), pinky = Local("pinky_01_r"), middle = Local("middle_01_r"), thumb = Local("thumb_01_r");
-            Vector3 handle = (index - pinky).normalized;                          // the handle crosses the fist, head on the index side
-            Vector3 forward = Vector3.ProjectOnPlane(middle, handle).normalized;   // the edge points where the fist points
-            gripRotation = Quaternion.LookRotation(Vector3.Cross(-forward, handle), handle); // tool +Y = handle, tool −X = edge
-            // Inside the closed fist: under the knuckles, toward the palm (the thumb's side), not on the back of the hand.
-            Vector3 palm = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(thumb, handle), forward).normalized;
-            gripPosition = middle * 0.85f + palm * (middle.magnitude * 0.3f);
+            if (!Fist.TryOf(heroine, "r", out hand, out Fist fist)) { Debug.LogWarning("[JeuSurvie] Main droite ou doigts introuvables : les outils ne seront pas tenus."); return; }
+            // The handle crosses the fist, head on the index side; the edge points where the fist points.
+            gripRotation = Quaternion.LookRotation(Vector3.Cross(-fist.Forward, fist.Handle), fist.Handle); // tool +Y = handle, tool −X = edge
+            gripPosition = fist.Centre;
         }
 
         /// <summary>Shows this item's model in the hand (null: empty hand).</summary>

@@ -98,6 +98,51 @@ namespace JeuSurvie.Tests
             }
         }
 
+        // Remade clips (Tools~/Blender/animations.py) must come with their timings: a gesture lasts its clip's length ÷ its
+        // playback speed (else she plays it faster or slower than filmed) and its impact sits on the clip's contact frame
+        // (else her time is bent to move the blow), as the clips' sheet animations.json gives them.
+        private const string ClipSheet = "Assets/StreamingAssets/assets/models/characters/heroine/animations.json";
+        private const double DurationToleranceShare = 0.02, ImpactTolerance = 0.01;
+
+        private static System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, object>> Clips()
+        {
+            if (!Fixture.Has(ClipSheet)) Assert.Ignore("animations de l'héroïne absentes (fabriquées par Tools~/Blender/animations.py, non versionnées)");
+            return Fixture.L(Fixture.Json(ClipSheet)["clips"]).Select(Fixture.O).ToDictionary(c => (string)c["name"]);
+        }
+
+        [Test]
+        public void GestureTimingsFollowTheHeroineClips()
+        {
+            var clips = Clips();
+            foreach (var kv in HarvestData.Gestures)
+            {
+                string clip = AnimationData.ClipOf(kv.Key);
+                Assert.IsTrue(clips.TryGetValue(clip, out var c), $"{clip} absente de animations.json");
+                double duration = Fixture.D(c["seconds"]) / Fixture.D(c["speed"]), contact = Fixture.D(c["contact"]);
+                Assert.AreEqual(duration, kv.Value.DurationS, DurationToleranceShare * duration,
+                    $"{kv.Key} : durée de HarvestData.Gestures à remettre à {duration:0.00} s (animation {clip})");
+                Assert.AreEqual(contact, kv.Value.ImpactAt, ImpactTolerance,
+                    $"{kv.Key} : moment du coup de HarvestData.Gestures à remettre à {contact:0.00} (animation {clip})");
+                Assert.AreEqual(AnimationData.TwoHanded(kv.Key), (bool)c["two_hands"], $"{kv.Key} : à deux mains ou non, comme l'animation {clip}");
+            }
+        }
+
+        // The clips are made with her left fist where the game keeps it (HandIk): else her left arm is yanked along the handle.
+        [Test]
+        public void TheLeftFistHoldsEachHandleWhereItsClipWasMade()
+        {
+            var clips = Clips();
+            foreach (ToolType t in Enum.GetValues(typeof(ToolType)))
+            {
+                Gesture g = Targeting.GestureOf(t);
+                if (!AnimationData.TwoHanded(g)) continue;
+                var c = clips[AnimationData.ClipOf(g)];
+                Assert.IsNotNull(c["left_grip"], $"{AnimationData.ClipOf(g)} : place de la main gauche absente");
+                Assert.AreEqual(Fixture.D(c["left_grip"]), AnimationData.SecondGripAlongHandleM(t), 1e-6,
+                    $"{t} : main gauche ailleurs que dans l'animation {AnimationData.ClipOf(g)}");
+            }
+        }
+
         [Test]
         public void TheHoeDigsHerbsArePulledAndBranchesPickedUp()
         {

@@ -31,8 +31,9 @@ namespace JeuSurvie.Core.Config
         /// <summary>The axe, pickaxe and hoe are swung with both hands: her left hand is put on the handle.</summary>
         public static bool TwoHanded(Gesture g) => g == Gesture.Chop || g == Gesture.Overhead || g == Gesture.Dig;
 
-        /// <summary>Where the left hand holds the handle, along it from the right hand (tool +Y, metres): just below it for
-        /// the short handles, well up the shaft for the hoe.</summary>
-        public static double SecondGripAlongHandleM(ToolType t) => t == ToolType.Hoe ? 0.42 : t == ToolType.Sickle ? 0 : -0.1;
+        /// <summary>Where the middle of the left fist holds the handle, up it from the right fist (tool +Y, metres): on the
+        /// leather of the axe and the pickaxe (their handle ends 0.13 m below the right fist), well up the hoe's long shaft.
+        /// The clips are made with the same places (animations.json « left_grip », Tools~/Blender/animations.py).</summary>
+        public static double SecondGripAlongHandleM(ToolType t) => t == ToolType.Hoe ? 0.5 : t == ToolType.Sickle ? 0 : 0.1;
     }
 }

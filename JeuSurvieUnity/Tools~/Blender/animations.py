@@ -13,7 +13,7 @@ import json, math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy
 from mathutils import Matrix, Vector
-from anim import retarget, sources
+from anim import retarget, sources, two_hands
 
 ARGS = sys.argv[sys.argv.index("--") + 1:]
 HEROINE, SOURCES, OBJETS, OUT = [os.path.abspath(a) for a in ARGS[:4]]
@@ -68,17 +68,20 @@ PREFIX = ARGS[5] if MODE == "candidats" and len(ARGS) > 5 else ""
 AXE, FARM, FEMALE = "Pro Melee Axe Pack", "Farming Pack", "Female Basic Locomotion Pack"
 # The clips José chose (2026-11-03). segments: source clip indices (0 = the source's first frame), (first, last[, step]),
 # joined in order (a short blend at each joint); contact: index in the joined clip of the blow / of the hand at the plant;
-# speed: the game's playback speed; two_hands: the left hand goes on the handle in the game.
+# speed: the game's playback speed; left_grip: a two-handed swing, her left fist on the handle that many metres up it from
+# her right fist (anim/two_hands.py) — on the leather of the axe and the pickaxe (their handle ends 0.13 m below her right
+# fist), well up the hoe's long shaft where the source's digger holds it; the game keeps the same places
+# (Core/Config/AnimationData.SecondGripAlongHandleM, checked against animations.json by CharacterAnimationTests).
 FINAL = {
     "Repos": dict(src=mixamo(FEMALE, "idle"), loop=True),
     "Marche": dict(src=mixamo(FEMALE, "walking"), loop=True, in_place=True),
     "Course": dict(src=mixamo("courses", "Run Forward"), loop=True, in_place=True),  # José's choice (C), 2026-11-03
     "Geste_Hache": dict(src=ual2("TreeChopping_Loop"), segments=[(21, 28), (0, 20)], loop=True, contact=14, speed=1.0,
-                        two_hands=True, tool="Outil_Hache_Pierre"),
+                        left_grip=0.10, tool="Outil_Hache_Pierre"),
     "Geste_Frappe": dict(src=mixamo(AXE, "standing melee attack downward"), segments=[(3, 48)], contact=24, speed=1.2,
-                         two_hands=True, tool="Outil_Pioche_Fer"),
+                         left_grip=0.10, tool="Outil_Pioche_Fer"),
     "Geste_Houe": dict(src=mixamo("singles", "Digging"), segments=[(0, 33), (31, 1, -2)], contact=27, speed=1.2,
-                       two_hands=True, tool="Outil_Houe_Cuivre"),
+                       left_grip=0.50, tool="Outil_Houe_Cuivre"),
     "Geste_Fauche": dict(src=ual2("Farm_Harvest"), segments=[(6, 66)], contact=27, speed=1.25, tool="Outil_Faucille_Fer"),
     "Geste_Cueillir": dict(src=mixamo(FARM, "pick fruit (3)"), segments=[(21, 75), (153, 198)], contact=33, speed=1.3),
     "Geste_Arracher": dict(src=mixamo(FARM, "pull plant"), segments=[(15, 117)], contact=42, speed=1.5),
@@ -88,25 +91,9 @@ CARRY = mixamo(AXE, "standing idle")         # her right arm and fist holding a 
 LEFT_GRIP = (mixamo("singles", "Digging"), 27)  # the left fist closed on a handle
 RIGHT_ARM = ("clavicle_r", "upperarm_r", "lowerarm_r", "hand_r")
 CARRY_SHARE = 0.85  # how much of the carrying arm replaces her own swinging arm
-BLEND = 6           # frames blended at each joint between two segments
 
 
 # ---------------------------------------------------------------------------------------------------------- tool in hand
-
-def grip_matrix(arm):
-    """The tool's place in the right hand, computed like the game (Runtime/Characters/HarvestGestures.cs, ToolInHand):
-    handle across the knuckles (head on the index side), edge along the hand; in the hand bone's rest space."""
-    b = arm.data.bones
-    h0, idx, pky, mid, thb = (b[n].head_local for n in ("hand_r", "index_01_r", "pinky_01_r", "middle_01_r", "thumb_01_r"))
-    handle = (idx - pky).normalized()
-    fwd = mid - h0
-    fwd = (fwd - fwd.dot(handle) * handle).normalized()
-    rot = Matrix((fwd, handle.cross(fwd), handle)).transposed().to_4x4()  # tool X → edge, tool Z → handle (Blender axes)
-    palm = thb - h0  # inside the fist: under the knuckles, toward the palm (the thumb's side)
-    palm = palm - palm.dot(handle) * handle
-    palm = (palm - palm.dot(fwd) * fwd).normalized()
-    return b["hand_r"].matrix_local.inverted() @ Matrix.Translation(h0 + (mid - h0) * 0.85 + palm * ((mid - h0).length * 0.3)) @ rot
-
 
 def load_tool(name):
     path = os.path.join(OBJETS, name + ".gltf")
@@ -224,35 +211,6 @@ class Library:
             sources.remove(self.ual2[0])
 
 
-def joined_frames(action, segments, loop):
-    """Source frames of the joined clip, and the indices where a new segment starts."""
-    if not segments:
-        return sources.frames(action, loop=loop), []
-    f0 = int(round(action.frame_range[0]))
-    frames, joints = [], []
-    for seg in segments:
-        first, last = seg[0], seg[1]
-        step = seg[2] if len(seg) > 2 else 1
-        if frames:
-            joints.append(len(frames))
-        frames += [f0 + i for i in range(first, last + (1 if step > 0 else -1), step)]
-    return frames, joints
-
-
-def blend_joints(bases, joints, width=BLEND):
-    """The last frames before each joint drift toward the first pose after it (no pop between segments)."""
-    out = [dict(b) for b in bases]
-    for j in joints:
-        target = bases[j]
-        for k in range(width):
-            i = j - width + k
-            if i < 0:
-                continue
-            t = (k + 1) / (width + 1)
-            out[i] = {n: (q.slerp(target[n][0], t), loc.lerp(target[n][1], t)) for n, (q, loc) in bases[i].items()}
-    return out
-
-
 def with_carry(bases, carry):
     """Her own steps with the right arm (mostly) holding a tool and the right fist closed."""
     out = []
@@ -303,19 +261,22 @@ def driven(bases_list):
 def export_final(tgt):
     lib = Library()
     clips, info = {}, {}
+    grip = two_hands.grip_matrix(tgt.arm)
     for name, r in FINAL.items():
         arm, action, own = lib.open(r["src"])
-        frames, joints = joined_frames(action, r.get("segments"), r.get("loop", False))
+        frames, joints = sources.joined_frames(action, r.get("segments"), r.get("loop", False))
         clip = retarget.retarget(arm, action, tgt, frames, in_place=r.get("in_place", False))
-        bases = blend_joints(clip.bases, joints)
+        bases = sources.blend_joints(clip.bases, joints)
+        if "left_grip" in r:
+            bases = two_hands.hands_on_handle(tgt.arm, tgt.order, bases, grip, r["left_grip"], loop=r.get("loop", False))
         if r.get("loop"):
             bases = bases + [bases[0]]  # the loop closes on its first pose
         clips[name] = bases
         n = len(bases)
         info[name] = dict(frames=n, seconds=round((n - 1) / FPS, 4), loop=bool(r.get("loop")),
                           contact=round(r["contact"] / (n - 1), 4) if "contact" in r else None,
-                          speed=r.get("speed", 1.0), two_hands=bool(r.get("two_hands")), speed_mps=round(clip.speed_mps, 3),
-                          tool=r.get("tool"))
+                          speed=r.get("speed", 1.0), two_hands="left_grip" in r, left_grip=r.get("left_grip"),
+                          speed_mps=round(clip.speed_mps, 3), tool=r.get("tool"))
         print(f"ANIMATIONS final {name}: {n} frames, {info[name]}", flush=True)
         if own:
             sources.remove(arm)
@@ -333,9 +294,9 @@ def export_final(tgt):
     right = fist(carry, "_r")
     clips["Geste_Prise"] = [right, right]
     clips["Prise_Gauche"] = [left, left]
-    for grip in ("Geste_Prise", "Prise_Gauche"):
-        info[grip] = dict(frames=2, seconds=round(1 / FPS, 4), loop=True, contact=None, speed=1.0, two_hands=False,
-                          speed_mps=0.0, tool=None)
+    for fist_clip in ("Geste_Prise", "Prise_Gauche"):
+        info[fist_clip] = dict(frames=2, seconds=round(1 / FPS, 4), loop=True, contact=None, speed=1.0, two_hands=False,
+                               left_grip=None, speed_mps=0.0, tool=None)
     actions = {name: write_keys(tgt, name, driven(b) if not name.startswith(("Geste_Prise", "Prise_")) else b)
                for name, b in clips.items()}
     export_gltf(tgt.arm, list(actions.values()))
@@ -380,7 +341,7 @@ def main():
         raise SystemExit(f"mode inconnu : {MODE}")
     tools = {t: load_tool(t) for t in {tool for tool, _ in shots.values() if tool}}
     cam = setup_render()
-    grip = grip_matrix(tgt.arm)
+    grip = two_hands.grip_matrix(tgt.arm)
     for name, (tool, loop) in shots.items():
         sources.use_action(tgt.arm, actions[name])
         if tgt.arm.animation_data:

@@ -36,9 +36,11 @@ Démo : F1 matin · F2 midi · F3 crépuscule · F4 nuit · F5 cycle ×60 · F6 
   `Assets/JeuSurvie/Resources/Audio`.
 - Animations de l'héroïne : `Tools~/Blender/animations.py … export <dossier heroine>` transfère les mouvements Mixamo et
   Quaternius 2 (`Tools~/Sources/mixamo`, `Tools~/Sources/quaternius-ual2`, hors git) sur son squelette et écrit
-  `models/characters/heroine/animations.gltf` + `animations.json` (moment du coup, vitesse) ; `… candidats` fait les
-  planches de choix ; `Tools~/Blender/test_anim.py` teste le transfert. Durées des gestes : `HarvestData.Gestures`.
-  (`gestes.py` et `hero.gltf` ne servent plus.)
+  `models/characters/heroine/animations.gltf` + `animations.json` (moment du coup, vitesse, place de la main gauche) ;
+  `… candidats` fait les planches de choix ; `Tools~/Blender/test_anim.py` teste le transfert. Hache, pioche et houe :
+  `anim/two_hands.py` pose la main gauche sur le manche à chaque image (`left_grip`, mêmes places que
+  `AnimationData.SecondGripAlongHandleM`). Durées des gestes : `HarvestData.Gestures` — après avoir refait les
+  animations, `CharacterAnimationTests` dit quelles valeurs remettre. (`gestes.py` et `hero.gltf` ne servent plus.)
 
 ## Paramètres de lancement (ex-paramètres d'adresse)
 Dans l'inspecteur de `GameBootstrap` (champ *Launch Arguments*) ou en ligne de commande d'un build :

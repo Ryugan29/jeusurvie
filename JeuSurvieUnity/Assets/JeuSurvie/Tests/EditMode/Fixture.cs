@@ -14,14 +14,21 @@ namespace JeuSurvie.Tests
         {
             get
             {
-                if (data == null) data = (Dictionary<string, object>)new MiniJson(File.ReadAllText(Locate())).ParseDocument();
+                if (data == null) data = Json("Assets/JeuSurvie/Tests/EditMode/Fixtures/parity.json");
                 return data;
             }
         }
 
-        private static string Locate()
+        /// <summary>A JSON file of the Unity project, by its path from the project root.</summary>
+        public static Dictionary<string, object> Json(string rel) => (Dictionary<string, object>)new MiniJson(File.ReadAllText(Locate(rel))).ParseDocument();
+
+        /// <summary>Whether the project has this file (made files are not versioned: absent from a fresh copy).</summary>
+        public static bool Has(string rel) => Find(rel) != null;
+
+        private static string Locate(string rel) => Find(rel) ?? throw new FileNotFoundException(rel);
+
+        private static string Find(string rel)
         {
-            const string rel = "Assets/JeuSurvie/Tests/EditMode/Fixtures/parity.json";
             // Unity: the working directory is the project root. dotnet test: walk up from the test binaries.
             if (File.Exists(rel)) return rel;
             string dir = AppContext.BaseDirectory;
@@ -31,7 +38,7 @@ namespace JeuSurvie.Tests
                 if (File.Exists(candidate)) return candidate;
                 dir = Path.GetDirectoryName(dir);
             }
-            throw new FileNotFoundException(rel);
+            return null;
         }
 
         public static List<object> List(string key) => (List<object>)Data[key];
