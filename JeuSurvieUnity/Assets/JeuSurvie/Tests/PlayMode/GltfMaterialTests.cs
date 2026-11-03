@@ -70,6 +70,11 @@ namespace JeuSurvie.Tests
             Assert.Greater(leaves.GetFloat("_Cutoff"), 0f, "les feuilles ne sont pas découpées");
             Assert.AreEqual((float)UnityEngine.Rendering.CullMode.Off, leaves.GetFloat("_Cull"), "les feuilles ne sont pas double-face");
             Assert.IsFalse(model.Renderers.Any(r => r.name.Contains("Ecorce")), "l'écorce doit pousser dans la peau, pas être une pièce posée dessus");
+            // Her hair is one opaque mass of rounded locks: no cut-out card edges (they twinkle), no original cap under it.
+            Material hair = materials["MI_Elfe_Cheveux"];
+            Assert.AreEqual(0f, hair.GetFloat("_Cutoff"), "les cheveux doivent être opaques, sans bords découpés");
+            Assert.AreEqual((float)UnityEngine.Rendering.CullMode.Back, hair.GetFloat("_Cull"), "les mèches sont des volumes fermés : faces arrière éliminées");
+            Assert.IsFalse(model.Renderers.Any(r => r.name.StartsWith("Hair_Long")), "plus de casque de cheveux d'origine sous la chevelure");
 
             LODGroup group = model.Pivot.GetComponentInChildren<LODGroup>();
             Assert.IsNotNull(group, "pas de groupe de LOD");

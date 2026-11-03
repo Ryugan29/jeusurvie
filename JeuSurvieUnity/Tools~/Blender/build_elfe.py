@@ -6,6 +6,7 @@ import bpy, bmesh, math, random, sys, os
 from mathutils import Vector, Matrix, noise
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # appended: inspect.py next to it must not hide the stdlib's
+import cheveux  # the hair: one sculpted mass of wavy locks
 import ecorce  # the bark grown in the skin (zones along the muscles) and the bark images
 import previews  # the review renders
 import tenue  # the outfit fitted on the skin (belt, leaves, vines) and its skin weights
@@ -19,7 +20,6 @@ random.seed(7)
 SKIN_MAUVE = (0.78, 0.52, 0.90, 1)  # lavender: clearly violet, still lighter than the bark so both read
 BARK_DARK, BARK_MID, BARK_LIGHT = (0.025, 0.014, 0.008, 1), (0.085, 0.050, 0.028, 1), (0.19, 0.115, 0.060, 1)
 LEAF_GREEN, LEAF_YOUNG = (0.07, 0.20, 0.03, 1), (0.25, 0.45, 0.07, 1)
-HAIR_GREY_GREEN = (0.22, 0.30, 0.24, 1)
 BROW_GREY_GREEN = (0.30, 0.40, 0.31, 1)  # a shade lighter than the hair so the long brows read against it
 GLOW = (0.70, 1.00, 0.20, 1)
 # By day the veins are paint, not light: a vivid yellow-green a little deeper than GLOW, so they read on the lavender skin
@@ -651,25 +651,10 @@ def eye_material():
     bsdf.inputs["Emission Strength"].default_value = DAY_GLOW
 
 
-def tint_hair_and_eyes():
-    hair = bpy.data.objects["Hair_Long"].data.materials[0]
-    bsdf = next(n for n in hair.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    src = bsdf.inputs["Base Color"].links[0].from_socket
-    bw = hair.node_tree.nodes.new("ShaderNodeRGBToBW")  # keep the strand shading, replace the colour
-    hair.node_tree.links.new(src, bw.inputs[0])
-    mul = hair.node_tree.nodes.new("ShaderNodeMix"); mul.data_type, mul.blend_type = "RGBA", "MULTIPLY"
-    mul.inputs["Factor"].default_value, mul.inputs[7].default_value = 1.0, HAIR_GREY_GREEN
-    hair.node_tree.links.new(bw.outputs[0], mul.inputs[6])
-    hair.node_tree.links.new(mul.outputs[2], bsdf.inputs["Base Color"])
-    hair.name = "MI_Elfe_Cheveux"
-    eye_material()
-
-
 # ====================================================================================================================
-# Chantiers C and D: painted textures (leaf, hair, seed), leaf cards, outfit, long hair, LODs and the glTF export.
+# Chantiers C and D: painted textures (leaf, seed), leaf cards, outfit, hair (cheveux.py), LODs and the glTF export.
 # ====================================================================================================================
 import numpy as np
-from mathutils import kdtree
 
 
 
@@ -697,22 +682,6 @@ def paint_leaf_texture(size=256):
     col = np.where((midrib | veins)[..., None], col * 0.62, col)
     rgba = np.concatenate([np.clip(col, 0, 1), inside[..., None].astype(np.float32)], axis=2)
     return _new_image("T_Elfe_Feuille", size, size, rgba)
-
-
-def paint_hair_texture(w=256, h=512):
-    """Hair card: vertical strands, darker roots (top), jagged transparent tips (bottom)."""
-    v, u = np.mgrid[0:h, 0:w].astype(np.float32)
-    u, v = u / w, v / h
-    rng = np.random.default_rng(9)
-    strands = 0.55 + 0.45 * np.sin(u * np.pi * 90 + rng.uniform(0, 6)) * np.sin(u * np.pi * 23 + 2.0)
-    strands *= 0.85 + 0.3 * np.sin(u * np.pi * 7 + v * 3)
-    tip = 0.05 + 0.25 * (0.5 + 0.5 * np.sin(u * np.pi * 37) * np.sin(u * np.pi * 11))
-    alpha = (v > tip).astype(np.float32)
-    base = np.array(HAIR_GREY_GREEN[:3])[None, None]
-    col = base * (0.6 + 0.6 * strands)[..., None]
-    col *= (1 - 0.3 * np.clip((v - 0.85) / 0.15, 0, 1))[..., None]  # darker roots
-    col *= (1 + 0.25 * np.exp(-((v - 0.55) / 0.08) ** 2))[..., None]  # a soft highlight band
-    return _new_image("T_Elfe_Cheveux", w, h, np.concatenate([np.clip(col, 0, 1), alpha[..., None]], axis=2))
 
 
 def solid_image(name, colour, size=16):
@@ -777,31 +746,6 @@ def leaves_mesh(name, tips, material, per_tip=3, size=(0.035, 0.055)):
     return cards_object(name, material, build)
 
 
-# --- Skinning: a new piece takes the weights of the nearest body vertex (it then follows the body in every animation);
-# `head_share(co)` optionally gives part of the weight to the Head bone (hair roots).
-def skin_like_body(o, body, arm, head_share=None):
-    kd = kdtree.KDTree(len(body.data.vertices))
-    for v in body.data.vertices:
-        kd.insert(v.co, v.index)
-    kd.balance()
-    names = [g.name for g in body.vertex_groups]
-    groups = {}
-    for v in o.data.vertices:
-        _, idx, _ = kd.find(v.co)
-        t = head_share(v.co) if head_share else 0.0
-        weights = {names[g.group]: g.weight * (1 - t) for g in body.data.vertices[idx].groups}
-        if t > 0:
-            weights["Head"] = weights.get("Head", 0.0) + t
-        for name, w in weights.items():
-            if w < 1e-4:
-                continue
-            if name not in groups:
-                groups[name] = o.vertex_groups.new(name=name)
-            groups[name].add([v.index], w, "REPLACE")
-    o.parent = arm
-    o.modifiers.new("Armature", "ARMATURE").object = arm
-
-
 # --- Outfit, fitted on the skin by tenue.py. Before the bake: what presses on the skin (belt, vine choker and its strands,
 # seeds, calf vines), so the skin can be shaded where they touch. After it: the leaves (skirt, shoulders), which the game
 # moves with Unity Cloth.
@@ -847,49 +791,20 @@ def make_outfit(arm, anatomy, weights, leaf_img):
     return [skirt, pads]
 
 
-# --- Long hair: ribbons from the scalp down the back, plus a few vines with leaves running through them
-def make_long_hair(arm, body, hair_img, leaf_img):
-    c = Vector((0, 0.025, 1.665))
-    vines, vine_tips = [], []
-
-    def hair(bm, uv):
-        for i in range(72):
-            th = math.radians(random.uniform(8, 172))  # 90° = straight back; 0/180° = the sides
-            root_z, L = 1.735 + random.uniform(-0.035, 0.01), random.uniform(0.36, 0.50)
-            phase, w0 = random.uniform(0, 6.28), random.uniform(0.028, 0.042)
-            back = max(0.0, math.sin(th))
-            pts = []
-            for k in range(8):
-                t = k / 7
-                r = 0.094 + 0.03 * math.sin(math.pi * t) - 0.02 * t
-                p = Vector((math.cos(th) * r * (1 - 0.15 * t), c.y + math.sin(th) * r + 0.045 * t * back, root_z - L * t))
-                p.x += 0.008 * math.sin(t * 7 + phase)
-                pts.append(p)
-            if i % 18 == 0:
-                vines.append([(p + Vector((0, 0.012 * back, 0)), 0.0035 * (1 - 0.5 * k / 7)) for k, p in enumerate(pts)])
-                vine_tips.extend((pts[k], pts[k + 1] - pts[k]) for k in (2, 5))
-            rows = []
-            for k, p in enumerate(pts):
-                t = k / 7
-                tangent = (pts[min(k + 1, 7)] - pts[max(k - 1, 0)]).normalized()
-                radial = Vector((p.x - c.x, p.y - c.y, 0)).normalized()
-                side = tangent.cross(radial).normalized()
-                w = w0 * (1 - 0.35 * t)
-                rows.append((bm.verts.new(p - side * w / 2), bm.verts.new(p + side * w / 2), 1 - t))
-            for (a0, b0, v0), (a1, b1, v1) in zip(rows, rows[1:]):
-                f = bm.faces.new((a0, b0, b1, a1))
-                for loop, (uu, vv) in zip(f.loops, ((0, v0), (1, v0), (1, v1), (0, v1))):
-                    loop[uv].uv = (uu, vv)
-
-    cards = cards_object("Elfe_Cheveux_Longs", card_material("MI_Elfe_Cheveux", hair_img, roughness=0.5), hair)
-    share = lambda co: smooth(1.42, 1.60, co.z)
-    skin_like_body(cards, body, arm, head_share=share)
-    vine_o = tube_mesh("Elfe_Cheveux_Lianes", vines)
+# --- Hair: one sculpted mass of wavy locks (cheveux.py), with a few vines and leaves running through it. It replaces the
+# base model's hair cap: that was a helmet of thick chunks, and with flat ribbon cards over it the hair read as stacked
+# slats (José, 2026-11-03).
+def make_hair(arm, body):
+    bpy.data.objects.remove(bpy.data.objects["Hair_Long"])
+    hair, centres = cheveux.build_mass(body)
+    hair.data.materials.append(cheveux.hair_material(_new_image("T_Elfe_Cheveux", *cheveux.TEXTURE_SIZE, cheveux.paint_texture())))
+    strands, tips = cheveux.vine_lines(centres)
+    vine_o = tube_mesh("Elfe_Cheveux_Lianes", strands)
     vine_o.data.materials.append(bpy.data.materials["MI_Elfe_Lianes"])
-    skin_like_body(vine_o, body, arm, head_share=share)
-    leaves = leaves_mesh("Elfe_Cheveux_Feuilles", vine_tips, bpy.data.materials["MI_Elfe_Feuilles"], per_tip=1, size=(0.03, 0.045))
-    skin_like_body(leaves, body, arm, head_share=share)
-    return cards
+    leaves = leaves_mesh("Elfe_Cheveux_Feuilles", tips, bpy.data.materials["MI_Elfe_Feuilles"], per_tip=1, size=(0.03, 0.045))
+    for o in (hair, vine_o, leaves):
+        cheveux.skin_on_head_and_back(o, body, arm)
+    return hair
 
 
 # --- Crown and eyebrows (leaf cards instead of solid leaves; thinner brows)
@@ -1032,11 +947,8 @@ def main():
     bsdf = body_material(body, (bark_colour, bark_height))
     use_baked_body(body, bake_body(body, bsdf))
     body.data.materials[0].name = "MI_Elfe_Corps"
-    tint_hair_and_eyes()
-    hair_cap = bpy.data.objects["Hair_Long"]
-    hair_cap.data.materials[0].name = "MI_Elfe_Cheveux_Base"
-    bake_simple(hair_cap, "T_Elfe_Cheveux_Base", 1024, with_normal=False)
-    leaf_img, hair_img = paint_leaf_texture(), paint_hair_texture()
+    eye_material()
+    leaf_img = paint_leaf_texture()
     crown, _ = make_crown(arm, leaf_img)
     crown.data.materials[0] = uv_bark_material("MI_Elfe_Bois")
     bake_simple(crown, "T_Elfe_Bois", 1024, with_normal=True)
@@ -1045,11 +957,11 @@ def main():
     weights.free()
     tenue.shrink_under_skirt(body, skirt)  # after the outfit was fitted on her skin: it now has room
     recompute_shading(body)
-    make_long_hair(arm, body, hair_img, leaf_img)
+    hair = make_hair(arm, body)
     strip_extra_uvs([body, lashes, bpy.data.objects["Eyes"]])
     lod0 = [o for o in bpy.data.objects if o.type == "MESH"]
     report(lod0)
-    make_lods([body, hair_cap, crown])
+    make_lods([body, hair, crown])
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT_DIR, "elfe.blend"))
     export_gltf(os.path.join(OUT_DIR, "export", "heroine.gltf"))
     cam = previews.setup_scene()

@@ -30,7 +30,7 @@ namespace JeuSurvie.Vegetation
             var alphaMode = gltfMaterial.GetAlphaMode();
             float cutoff = alphaMode == MaterialBase.AlphaMode.Mask ? gltfMaterial.alphaCutoff : alphaMode == MaterialBase.AlphaMode.Blend ? 0.5f : 0f;
             m.SetFloat("_Cutoff", cutoff);
-            // Double-sided drawing only for cut-out cards (leaves, hair): closed meshes flagged doubleSided (demon, hero) keep
+            // Double-sided drawing only for cut-out cards (leaves): closed meshes flagged doubleSided (demon, hero) keep
             // back-face culling, as before, for their shadows and their fill rate.
             m.SetFloat("_Cull", gltfMaterial.doubleSided && cutoff > 0f ? (float)CullMode.Off : (float)CullMode.Back);
             NormalTextureInfoBase normal = gltfMaterial.NormalTexture;

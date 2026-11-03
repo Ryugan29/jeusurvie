@@ -44,7 +44,7 @@ namespace JeuSurvie.Tests
         public void HeightIgnoresTheCrownAndTheLodCopies()
         {
             Assert.IsTrue(CharacterLods.CountsForHeight("Superhero_Female"));
-            Assert.IsTrue(CharacterLods.CountsForHeight("Elfe_Cheveux_Longs"));
+            Assert.IsTrue(CharacterLods.CountsForHeight("Elfe_Cheveux"));
             Assert.IsFalse(CharacterLods.CountsForHeight("Elfe_Couronne"));
             Assert.IsFalse(CharacterLods.CountsForHeight("Elfe_Couronne_Feuilles"));
             Assert.IsFalse(CharacterLods.CountsForHeight("Superhero_Female_LOD1"));
