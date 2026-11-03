@@ -1,6 +1,7 @@
 // Starts the game exactly like the Play button (GameBootstrap creates itself), waits for the world, then checks what is drawn:
 // every JeuSurvie shader compiled without error for this graphics API (an error shader is drawn magenta), the near ground and
-// the vegetation are there, and the ground really covers the lower half of the view (seen through, it showed the sky).
+// the vegetation are there, the ground really covers the lower half of the view (seen through, it showed the sky), and no
+// film grain is laid over the image (it made the elf's skin sparkle).
 // Writes a picture and a report to Builds/Capture (git-ignored) so a failure can be looked at. Editor only: it reads the
 // shader compiler messages.
 #if UNITY_EDITOR
@@ -13,6 +14,7 @@ using UnityEditor;
 using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.TestTools;
 
 namespace JeuSurvie.Tests
@@ -58,6 +60,9 @@ namespace JeuSurvie.Tests
             foreach (var group in materials.GroupBy(m => m.shader.name)) report.AppendLine($"  {group.Count(),4} × {group.Key}");
             int foliage = materials.Count(m => m.shader.name == "JeuSurvie/Foliage");
 
+            bool filmGrain = Object.FindObjectsByType<Volume>(FindObjectsInactive.Exclude)
+                .Any(v => v.enabled && v.sharedProfile != null && v.sharedProfile.TryGet(out FilmGrain g) && g.active);
+
             Texture2D picture = Render(cam);
             File.WriteAllBytes(Path.Combine(outDir, "editor-play.png"), picture.EncodeToPNG());
             Object.Destroy(picture);
@@ -72,6 +77,7 @@ namespace JeuSurvie.Tests
             Assert.Greater(nearGround, 0, "aucun morceau de sol proche (JeuSurvie/Terrain) n'est dessiné");
             Assert.Greater(foliage, 0, "aucun matériau de végétation : la bibliothèque de modèles n'a rien chargé");
             Assert.Less(background, MaxBackgroundShareUnderHorizon, "on voit le fond à travers le sol (triangles du sol retournés ?)");
+            Assert.IsFalse(filmGrain, "grain de pellicule sur l'image : il fait scintiller la peau de l'elfe");
         }
 
         /// <summary>Appends the shader state to the report; true if it is broken.</summary>

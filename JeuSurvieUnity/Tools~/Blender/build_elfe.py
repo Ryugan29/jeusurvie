@@ -24,7 +24,16 @@ BROW_GREY_GREEN = (0.30, 0.40, 0.31, 1)  # a shade lighter than the hair so the 
 GLOW = (0.70, 1.00, 0.20, 1)
 # By day the veins are paint, not light: a vivid yellow-green a little deeper than GLOW, so they read on the lavender skin
 # and on the bark without looking lit; at night the game's glow map lights the same lines up.
-VEIN_DAY, VEIN_DAY_STRENGTH, VEIN_DAY_WIDTH = (0.50, 0.80, 0.12, 1), 0.85, 0.036
+VEIN_DAY, VEIN_DAY_STRENGTH, VEIN_DAY_WIDTH = (0.50, 0.80, 0.12, 1), 0.85, 0.11
+# Few, wide veins: a network cell is ~6.7 cm (1 / VEIN_SCALE m) and a line is width / scale wide at half strength (5 mm
+# of light, 7 mm of paint): 2 screen pixels or more from the game camera. The first veins (1 mm) were thinner than a pixel
+# there and broke into twinkling dots. The cheek cracks (cells ~2.9 cm, 2 mm) stay fine, so they are paint and a shallow
+# relief only, never lit.
+VEIN_SCALE, VEIN_GLOW_WIDTH = 15, 0.075
+CRACK_SCALE, CRACK_WIDTH = 35, 0.07
+# Below the neck the base texture can't be reused: her bra and panties are painted on it. The body is one even skin tone
+# there, as bright as her lifted base skin (median 0.23 → 0.46), so it meets the head, hands and feet without a seam.
+BODY_SKIN_LUM = 0.46
 LEATHER, VINE, SEED = (0.075, 0.045, 0.025, 1), (0.14, 0.18, 0.07, 1), (0.92, 0.96, 0.55, 1)
 DAY_GLOW = 0.3  # emission strength by day in Blender previews and in the export; the game drives the night glow itself
 
@@ -394,12 +403,24 @@ def bark_material(name):
     return m
 
 
-def skin_tone(n, src):
-    """Lavender skin: keeps the base texture's shading (eye sockets, nostrils, muscles) but replaces its hue."""
+def painted_details(n, rest):
+    """1 on the head (above the neck), the hands (past the wrists, T-pose) and the feet (below the ankles), 0 on the body
+    in between, blended over 4 cm."""
+    p = n.xyz(rest)
+    zones = (n.remap(p["Z"], 1.49, 1.53), n.remap(n.math("ABSOLUTE", p["X"]), 0.62, 0.66), n.remap(p["Z"], 0.13, 0.09))
+    for zone in zones:
+        zone.node.interpolation_type = "SMOOTHSTEP"
+    return n.math("MAXIMUM", n.math("MAXIMUM", zones[0], zones[1]), zones[2])
+
+
+def skin_tone(n, src, rest):
+    """Lavender skin. Head, hands and feet keep the base texture's shading (eye sockets, nostrils, nails, toes) with its
+    hue replaced; the body in between is BODY_SKIN_LUM, even."""
     bw = n.nt.nodes.new("ShaderNodeRGBToBW"); n.link(src, bw.inputs[0])
     lum = bw.outputs[0]
-    underwear = n.remap(lum, 0.30, 0.18)  # paints out the base model's dark underwear
-    lum = n.math("MULTIPLY_ADD", n.math("SUBTRACT", 0.62, lum), underwear, lum)
+    lift = n.remap(lum, 0.30, 0.18)  # brightens the darker base skin
+    lum = n.math("MULTIPLY_ADD", n.math("SUBTRACT", 0.62, lum), lift, lum)
+    lum = n.mix_value(BODY_SKIN_LUM, lum, painted_details(n, rest))
     grey = n.nt.nodes.new("ShaderNodeCombineColor")
     for c in ("Red", "Green", "Blue"):
         n.link(n.math("MULTIPLY", lum, 1.35), grey.inputs[c])
@@ -431,7 +452,8 @@ def body_factors(n, rest, bark_images):
     bark = n.remap(n.math("SUBTRACT", flecks, 0.2), 0.28, 0.4)  # from the second stratum of the relief inwards
     turning = n.math("MULTIPLY", n.remap(amount, 0.0, 0.28), n.math("SUBTRACT", 1.0, bark))
     fissure = n.math("MULTIPLY", turning, n.remap(furrow, 0.70, 0.90))
-    crack = n.math("MULTIPLY", n.remap(n.voronoi(n.warped(rest, 60, 0.004), 110), 0.010, 0.0), n.attr("ElfeFissures"))
+    crack_lines = n.voronoi(n.warped(rest, 19, 0.0126), CRACK_SCALE)
+    crack = n.math("MULTIPLY", n.remap(crack_lines, CRACK_WIDTH, 0.0), n.attr("ElfeFissures"))
     keep = n.math("GREATER_THAN", n.voronoi(rest, 420, "F1", "Color"), 0.55)  # only some cells get a freckle
     freckle = n.math("MULTIPLY", n.math("MULTIPLY", n.remap(n.voronoi(rest, 420, "F1"), 0.32, 0.18), keep), n.attr("ElfeTaches"))
     return dict(bark=bark, turning=turning, fissure=fissure, crack=crack, freckle=freckle, contact=n.attr("ElfeContact"),
@@ -443,7 +465,7 @@ def skin_colour(n, src, rest, f, glow):
     the furrows run on into it as fine fissures, then it becomes bark; shaded where a vine or the belt presses on it; last,
     the veins and glyphs painted in vivid yellow-green so they read by day too (the game's night glow then lights the same
     lines up). Nothing is painted under the skirt: its leaves move, so the skin shows between them."""
-    skin = face_paint(n, skin_tone(n, src), rest)
+    skin = face_paint(n, skin_tone(n, src, rest), rest)
     skin = n.mix(skin, (0.46, 0.28, 0.38, 1), n.math("MULTIPLY", f["freckle"], 0.6))
     skin = n.mix(skin, (0.22, 0.13, 0.07, 1), f["crack"])
     skin = n.mix(skin, (0.13, 0.09, 0.09, 1), n.math("MULTIPLY", f["turning"], 0.75))  # skin ~(0.3, 0.2, 0.35): duller, darker
@@ -453,22 +475,22 @@ def skin_colour(n, src, rest, f, glow):
     return n.mix(skin, VEIN_DAY, n.math("MULTIPLY", glow, VEIN_DAY_STRENGTH))
 
 
-def glow_mask(n, rest, f, width=0.024):
-    """Where the inner light shows: thin organic veins in the glow zones, cheek cracks, diamond glyphs (forehead, sternum)."""
-    veins = n.math("MULTIPLY", n.remap(n.voronoi(n.warped(rest, 25, 0.012), 45), width, 0.0), n.attr("ElfeLueur"))
-    cheek = n.math("MULTIPLY", f["crack"], 0.5)
+def glow_mask(n, rest, width=VEIN_GLOW_WIDTH):
+    """Where the inner light shows: organic veins in the glow zones, diamond glyphs (forehead, sternum)."""
+    lines = n.voronoi(n.warped(rest, 8, 0.036), VEIN_SCALE)
+    veins = n.math("MULTIPLY", n.remap(lines, width, 0.0), n.attr("ElfeLueur"))
     glyphs = n.math("MAXIMUM", n.diamond(rest, 1.715, 0.006, 0.014), n.diamond(rest, 1.43, 0.010, 0.022))
-    return n.math("MINIMUM", n.math("MAXIMUM", n.math("MAXIMUM", veins, cheek), glyphs), 1.0)
+    return n.math("MINIMUM", n.math("MAXIMUM", veins, glyphs), 1.0)
 
 
 def relief_height(n, rest, f):
-    """Height field for the normal map (the bark's big relief is real geometry): skin grain, fine furrows and fibres of
-    the bark (in the bark image), the fissures in the turning skin, cheek cracks, lip lines."""
-    grain = n.math("MULTIPLY", n.noise(rest, 350, detail=2), 0.06)
+    """Height field for the normal map (the bark's big relief is real geometry): fine furrows and fibres of the bark (in
+    the bark image), the fissures in the turning skin, cheek cracks, lip lines. No skin grain: 3 mm bumps are smaller than
+    a screen pixel in the game and made the skin sparkle."""
     lip_lines = n.math("MULTIPLY", f["lips"], n.math("MULTIPLY", n.noise(n.vscale(rest, (60, 1, 6)), 8), 0.25))
     bark = n.math("MULTIPLY_ADD", f["bark"], n.math("MULTIPLY", f["furrow"], -1.0), n.math("MULTIPLY", f["fissure"], -0.5))
     crack = n.math("MULTIPLY", f["crack"], -0.15)
-    return n.math("ADD", n.math("ADD", grain, lip_lines), n.math("ADD", bark, crack))
+    return n.math("ADD", lip_lines, n.math("ADD", bark, crack))
 
 
 def roughness_value(n, f, glow):
@@ -488,8 +510,8 @@ def body_material(body, bark_images):
     src = bsdf.inputs["Base Color"].links[0].from_socket
     rest = n.attr("ElfeRepos", "Vector")
     f = body_factors(n, rest, bark_images)
-    glow = glow_mask(n, rest, f)
-    day_lines = glow_mask(n, rest, f, width=VEIN_DAY_WIDTH)  # a bit wider than the light: still readable from the game camera
+    glow = glow_mask(n, rest)
+    day_lines = glow_mask(n, rest, width=VEIN_DAY_WIDTH)  # a bit wider than the light: still readable from the game camera
     n.link(skin_colour(n, src, rest, f, day_lines), bsdf.inputs["Base Color"])
     n.link(roughness_value(n, f, glow), bsdf.inputs["Roughness"])
     bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 1.0; bump.inputs["Distance"].default_value = 0.0025

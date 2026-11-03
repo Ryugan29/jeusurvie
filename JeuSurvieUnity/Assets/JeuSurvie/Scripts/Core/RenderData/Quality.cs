@@ -17,7 +17,8 @@ namespace JeuSurvie.Core.RenderData
     public sealed class ImageQuality { public int Msaa; public double MaxPixelRatio; public bool Fxaa; }
     public sealed class SkyQuality { public CloudQuality Clouds; public int EnvProbeSize; public double EnvProbeRefreshS; }
     public sealed class DofQuality { public double FromM, FullM, MaxBlurPx; }
-    public sealed class PostQuality { public int BloomKernel; public bool AerialPerspective; public DofQuality Dof; public double MotionBlur, Grain, Sharpen; }
+    // No film grain (the original's grain 4-5): its noise, changing every frame, made the elf's skin sparkle.
+    public sealed class PostQuality { public int BloomKernel; public bool AerialPerspective; public DofQuality Dof; public double MotionBlur, Sharpen; }
     public sealed class TerrainQuality { public int TextureSize, Anisotropy; public bool NormalMaps; }
     public sealed class FarTerrainQuality { public double HalfSizeM, StepM; }
     public sealed class DistanceQuality { public double ViewRadiusM; public FarTerrainQuality FarTerrain; public double VegetationRange, CoverRadiusM, CoverDensity; }
@@ -62,7 +63,7 @@ namespace JeuSurvie.Core.RenderData
                         Image = new ImageQuality { Msaa = 1, MaxPixelRatio = 1, Fxaa = true },
                         Shadows = new ShadowQuality { Cascades = 2, MapSize = 1024, RangeM = 60, Filter = ShadowFilter.PcfLow },
                         Sky = new SkyQuality { Clouds = CloudQuality.Flat, EnvProbeSize = 32, EnvProbeRefreshS = 2 },
-                        Post = new PostQuality { BloomKernel = 32, AerialPerspective = false, MotionBlur = 0, Grain = 0, Sharpen = 0 },
+                        Post = new PostQuality { BloomKernel = 32, AerialPerspective = false, MotionBlur = 0, Sharpen = 0 },
                         Terrain = new TerrainQuality { TextureSize = 256, Anisotropy = 2, NormalMaps = false },
                         Distances = new DistanceQuality { ViewRadiusM = 320, FarTerrain = new FarTerrainQuality { HalfSizeM = 2000, StepM = 80 }, VegetationRange = 0.6, CoverRadiusM = 35, CoverDensity = 0.5 },
                         RainDrops = 1500,
@@ -76,7 +77,7 @@ namespace JeuSurvie.Core.RenderData
                         Ao = new AoQuality { Samples = 8, Ratio = 0.5, RadiusM = 0.8, Strength = 1, ExpensiveBlur = false },
                         Rays = new RaysQuality { Samples = 24, Ratio = 0.33, OccluderRangeM = 150 },
                         Sky = new SkyQuality { Clouds = CloudQuality.Layered, EnvProbeSize = 64, EnvProbeRefreshS = 1 },
-                        Post = new PostQuality { BloomKernel = 48, AerialPerspective = true, MotionBlur = 0, Grain = 4, Sharpen = 0.08 },
+                        Post = new PostQuality { BloomKernel = 48, AerialPerspective = true, MotionBlur = 0, Sharpen = 0.08 },
                         Terrain = new TerrainQuality { TextureSize = 512, Anisotropy = 4, NormalMaps = true },
                         Distances = new DistanceQuality { ViewRadiusM = 448, FarTerrain = new FarTerrainQuality { HalfSizeM = 3000, StepM = 50 }, VegetationRange = 0.8, CoverRadiusM = 55, CoverDensity = 0.75 },
                         RainDrops = 3000,
@@ -91,7 +92,7 @@ namespace JeuSurvie.Core.RenderData
                         Ssr = new SsrQuality { Ratio = 0.5, Steps = 32, MaxDistanceM = 60, Blur = false },
                         Rays = new RaysQuality { Samples = 32, Ratio = 0.5, OccluderRangeM = 200 },
                         Sky = new SkyQuality { Clouds = CloudQuality.Layered, EnvProbeSize = 128, EnvProbeRefreshS = 0.5 },
-                        Post = new PostQuality { BloomKernel = 64, AerialPerspective = true, MotionBlur = 0, Grain = 5, Sharpen = 0.1 },
+                        Post = new PostQuality { BloomKernel = 64, AerialPerspective = true, MotionBlur = 0, Sharpen = 0.1 },
                         Terrain = new TerrainQuality { TextureSize = 1024, Anisotropy = 8, NormalMaps = true },
                         Distances = new DistanceQuality { ViewRadiusM = 512, FarTerrain = new FarTerrainQuality { HalfSizeM = 4000, StepM = 40 }, VegetationRange = 1, CoverRadiusM = 70, CoverDensity = 1 },
                         RainDrops = 6000,
@@ -106,7 +107,7 @@ namespace JeuSurvie.Core.RenderData
                         Ssr = new SsrQuality { Ratio = 1, Steps = 64, MaxDistanceM = 120, Blur = true },
                         Rays = new RaysQuality { Samples = 48, Ratio = 0.5, OccluderRangeM = 300 },
                         Sky = new SkyQuality { Clouds = CloudQuality.Volumetric, EnvProbeSize = 256, EnvProbeRefreshS = 0.25 },
-                        Post = new PostQuality { BloomKernel = 96, AerialPerspective = true, Dof = new DofQuality { FromM = 90, FullM = 900, MaxBlurPx = 6 }, MotionBlur = 0.35, Grain = 5, Sharpen = 0.12 },
+                        Post = new PostQuality { BloomKernel = 96, AerialPerspective = true, Dof = new DofQuality { FromM = 90, FullM = 900, MaxBlurPx = 6 }, MotionBlur = 0.35, Sharpen = 0.12 },
                         Terrain = new TerrainQuality { TextureSize = 2048, Anisotropy = 16, NormalMaps = true },
                         Distances = new DistanceQuality { ViewRadiusM = 640, FarTerrain = new FarTerrainQuality { HalfSizeM = 6000, StepM = 32 }, VegetationRange = 1.35, CoverRadiusM = 90, CoverDensity = 1 },
                         RainDrops = 9000,

@@ -87,6 +87,33 @@ namespace JeuSurvie.Tests
             Assert.Greater(topWithCrown, maxY + 0.1f, "la couronne doit dépasser au-dessus des 1,70 m du corps");
             Object.Destroy(model.Pivot.gameObject);
         }
+
+        // The screen's contact shading (SSAO) comes from noisy samples: on a moving character's smooth skin it shows as dark
+        // blotches that crawl. Characters are drawn without it (the elf's outfit shading is painted in her skin); the
+        // vegetation keeps it.
+        [UnityTest]
+        public IEnumerator CharactersAreDrawnWithoutScreenContactShading()
+        {
+            string path = Path.Combine(ModelsDir, "characters", "heroine", "heroine.gltf");
+            Assume.That(File.Exists(path), "héroïne absente");
+            Shader pbr = Shader.Find("JeuSurvie/NaturePBR"), foliage = Shader.Find("JeuSurvie/Foliage");
+            var library = new ModelLibrary(Path.Combine(ModelsDir, "nature"), foliage, pbr);
+            Task vegetation = library.LoadAsync(new[] { "CommonTree_2" });
+            Task<AnimatedModel> heroine = CharacterLoader.LoadAsync(path, 1.7, pbr);
+            yield return new WaitUntil(() => vegetation.IsCompleted && heroine.IsCompleted);
+            Assert.IsTrue(vegetation.Status == TaskStatus.RanToCompletion, vegetation.Exception?.GetBaseException().Message);
+            Assert.IsTrue(heroine.Status == TaskStatus.RanToCompletion, heroine.Exception?.GetBaseException().Message);
+
+            var hers = heroine.Result.Renderers.SelectMany(r => r.sharedMaterials).Distinct().ToList();
+            var trunk = library.PartsOf("CommonTree_2").Select(p => p.Material).Where(m => m.shader == pbr).ToList();
+            Assert.IsNotEmpty(trunk, "l'arbre n'a aucune pièce au shader NaturePBR");
+            Assert.IsNotEmpty(hers, "l'héroïne n'a aucun matériau");
+            Assert.IsFalse(hers.Contains(null), "l'héroïne a un matériau vide");
+            Assert.IsTrue(hers.All(m => m.HasProperty("_ScreenAO")), "le shader des personnages n'a pas de réglage _ScreenAO");
+            Assert.IsTrue(hers.All(m => m.GetFloat("_ScreenAO") == 0f), "l'héroïne reçoit encore l'ombre de contact de l'écran (taches qui bougent sur sa peau)");
+            Assert.IsTrue(trunk.All(m => m.GetFloat("_ScreenAO") == 1f), "la végétation doit garder l'ombre de contact de l'écran");
+            Object.Destroy(heroine.Result.Pivot.gameObject);
+        }
     }
 }
 #endif

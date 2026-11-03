@@ -45,7 +45,8 @@ float3 JS_ApplyHeightFog(float3 color, float3 positionWS)
 // Physically based lighting shared by terrain, far terrain and solid nature/character materials: URP BRDF, main light with
 // cascaded shadows, SSAO, spherical-harmonics ambient (the hemispheric sky/ground light of the hour) and the sky reflection
 // probe scaled by envIntensity (Babylon environmentIntensity: only part of the sky reflection reaches these surfaces).
-half3 JS_LightPBR(float3 positionWS, float3 normalWS, half3 albedo, half metallic, half roughness, half occlusion, half envIntensity, float4 positionCS)
+// screenAO scales the SSAO: 0 for characters (on moving smooth skin its noisy samples crawl as dark blotches).
+half3 JS_LightPBR(float3 positionWS, float3 normalWS, half3 albedo, half metallic, half roughness, half occlusion, half envIntensity, float4 positionCS, half screenAO)
 {
     float3 viewDirWS = GetWorldSpaceNormalizeViewDir(positionWS);
     float2 screenUV = GetNormalizedScreenSpaceUV(positionCS);
@@ -57,8 +58,8 @@ half3 JS_LightPBR(float3 positionWS, float3 normalWS, half3 albedo, half metalli
     Light mainLight = GetMainLight(shadowCoord, positionWS, half4(1, 1, 1, 1));
 #if defined(_SCREEN_SPACE_OCCLUSION)
     AmbientOcclusionFactor ao = GetScreenSpaceAmbientOcclusion(screenUV);
-    occlusion = min(occlusion, ao.indirectAmbientOcclusion);
-    mainLight.color *= ao.directAmbientOcclusion;
+    occlusion = min(occlusion, lerp(1.0h, ao.indirectAmbientOcclusion, screenAO));
+    mainLight.color *= lerp(1.0h, ao.directAmbientOcclusion, screenAO);
 #endif
     half3 bakedGI = SampleSH(normalWS);
     half3 indirectDiffuse = bakedGI * occlusion;

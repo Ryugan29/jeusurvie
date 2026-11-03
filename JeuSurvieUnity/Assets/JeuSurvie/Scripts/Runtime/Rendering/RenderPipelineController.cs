@@ -1,7 +1,8 @@
 // Port of babylon/render-pipeline + post-processing + sun-shadows + ambient-occlusion: the graphics profile drives the URP asset
 // (shadows, cascades, filtering, MSAA, render scale = pixel density), the SSAO and atmosphere renderer features, the camera
-// (FXAA, HDR) and a runtime post-processing Volume (bloom, ACES, exposure/saturation/tint of the hour, vignette, grain, motion
-// blur). `Apply(profile)` rebuilds live; `UpdateFrame` sets what follows light, weather and hour (no allocation).
+// (FXAA, HDR) and a runtime post-processing Volume (bloom, ACES, exposure/saturation/tint of the hour, vignette, motion blur;
+// no film grain: see PostQuality). `Apply(profile)` rebuilds live; `UpdateFrame` sets what follows light, weather and hour
+// (no allocation).
 using System;
 using System.Reflection;
 using JeuSurvie.Core.RenderData;
@@ -52,7 +53,6 @@ namespace JeuSurvie.Rendering
         private readonly Tonemapping tonemapping;
         private readonly ColorAdjustments color;
         private readonly Vignette vignette;
-        private readonly FilmGrain grain;
         private readonly MotionBlur motionBlur;
         private QualitySettings quality;
         private bool ssrActive = true;
@@ -82,7 +82,6 @@ namespace JeuSurvie.Rendering
             tonemapping = profile.Add<Tonemapping>(true);
             color = profile.Add<ColorAdjustments>(true);
             vignette = profile.Add<Vignette>(true);
-            grain = profile.Add<FilmGrain>(true);
             motionBlur = profile.Add<MotionBlur>(true);
             tonemapping.mode.Override(toneMapping == ToneMappingChoice.Neutral ? TonemappingMode.Neutral : toneMapping == ToneMappingChoice.None ? TonemappingMode.None : TonemappingMode.ACES);
             bloom.threshold.Override(Mathf.Pow(BloomThresholdLinear, 1f / 2.2f));
@@ -91,7 +90,6 @@ namespace JeuSurvie.Rendering
             vignette.intensity.Override(VignetteIntensity);
             vignette.smoothness.Override(0.45f);
             vignette.color.Override(Color.black);
-            grain.type.Override(FilmGrainLookup.Thin2);
             motionBlur.mode.Override(MotionBlurMode.CameraOnly);
             volume.enabled = grading;
         }
@@ -135,8 +133,6 @@ namespace JeuSurvie.Rendering
             camera.allowMSAA = MsaaSamples > 1;
             bloom.active = q.Post.BloomKernel > 0;
             bloom.scatter.Override(Mathf.Clamp01(0.45f + q.Post.BloomKernel / 400f));
-            grain.active = q.Post.Grain > 0;
-            grain.intensity.Override(Mathf.Clamp01((float)q.Post.Grain / 50f));
             motionBlur.active = q.Post.MotionBlur > 0;
             motionBlur.intensity.Override((float)q.Post.MotionBlur);
             motionBlur.quality.Override(MotionBlurQuality.Medium);

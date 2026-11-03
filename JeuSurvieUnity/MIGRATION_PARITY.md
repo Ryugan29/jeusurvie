@@ -78,7 +78,7 @@ Source de vérité : `src/` du projet Babylon (racine du dépôt). Correspondanc
 | SSR (sol mouillé) | `AtmosphereFeature` passe WetReflections | Implémenté | URP n'a pas de SSR : passe maison |
 | atmosphere-pass (perspective atmosphérique, profondeur de champ) | `AtmosphereFeature` + `Atmosphere.shader` | Implémenté | |
 | sun-rays | idem | Implémenté | occlusion par la profondeur caméra (écart mineur) |
-| post-processing (ACES, exposition, saturation, teinte, halo, vignette, grain, netteté, FXAA, MSAA, flou de mouvement) | `RenderPipelineController` (Volume URP) + passe de netteté | Implémenté | |
+| post-processing (ACES, exposition, saturation, teinte, halo, vignette, grain, netteté, FXAA, MSAA, flou de mouvement) | `RenderPipelineController` (Volume URP) + passe de netteté | Implémenté | grain retiré le 2026-11-03 (choix de José : image nette) |
 | lens-drops | `AtmosphereFeature` passe finale | Implémenté | |
 | rain-renderer, night-magic-renderer (lucioles, champignons) | `Atmosphere/Particles.cs` | Implémenté | |
 | wet-surfaces, pbr-fog, height-fog-plugin | shaders (globales `_JS_Wet`, `_JS_HeightFog`) | Implémenté | |

@@ -20,6 +20,7 @@ Shader "JeuSurvie/NaturePBR"
         _UseMetallicMap ("Metallic from map (glTF: blue channel, × Metallic)", Float) = 0
         _GlowMap ("Night glow colour map (glTF emissive)", 2D) = "black" {}
         _UseGlowMap ("Night glow from map", Float) = 0
+        _ScreenAO ("Screen contact shading (SSAO; 0 = characters)", Range(0, 1)) = 1
         _Cutoff ("Alpha cutoff", Range(0, 1)) = 0
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
     }
@@ -46,6 +47,7 @@ Shader "JeuSurvie/NaturePBR"
             float _UseRoughnessMap;
             float _UseMetallicMap;
             float _UseGlowMap;
+            float _ScreenAO;
             float _Cutoff;
             float _Cull;
         CBUFFER_END
@@ -128,7 +130,7 @@ Shader "JeuSurvie/NaturePBR"
                 }
                 float rough = min(roughBase, max(0.12, roughBase * (1.0 - 0.55 * w)));
                 albedo *= 1.0 - 0.3 * w;
-                half3 color = JS_LightPBR(i.positionWS, N, albedo, metallic, rough, 1, _EnvIntensity, i.positionCS);
+                half3 color = JS_LightPBR(i.positionWS, N, albedo, metallic, rough, 1, _EnvIntensity, i.positionCS, _ScreenAO);
                 // Night glow: mushrooms tint their own texture with the magic colour; a glow map (glTF emissive, e.g. the
                 // elf's veins) glows in its own colours, scaled by how deep the night is (the 1.6 brings it to the mushrooms' level),
                 // and keeps a faint glow by day (about a sixth of the night's) so the veins never go out completely.

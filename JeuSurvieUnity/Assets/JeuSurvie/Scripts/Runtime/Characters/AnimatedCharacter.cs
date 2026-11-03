@@ -73,6 +73,7 @@ namespace JeuSurvie.Characters
                         m.SetFloat("_Roughness", (float)s.Roughness);
                         m.SetFloat("_EnvIntensity", (float)s.EnvironmentIntensity);
                         m.SetFloat("_UseVertexColor", 0);
+                        m.SetFloat("_ScreenAO", 0); // no SSAO: its noisy samples crawl as dark blotches on moving skin
                         CopyMaps(mats[i], m);
                         converted[mats[i]] = m;
                     }

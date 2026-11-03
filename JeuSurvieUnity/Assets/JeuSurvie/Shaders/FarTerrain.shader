@@ -49,7 +49,7 @@ Shader "JeuSurvie/FarTerrain"
                 float2 fromPlayer = i.positionWS.xz - _FarParams.xy;
                 clip(dot(fromPlayer, fromPlayer) - _FarParams.z * _FarParams.z);
                 float3 albedo = JS_ToLinear(i.color.rgb) * _FarCenter.z;
-                half3 color = JS_LightPBR(i.positionWS, normalize(i.normalWS), albedo, 0, _FarCenter.w, 1, _EnvIntensity, i.positionCS);
+                half3 color = JS_LightPBR(i.positionWS, normalize(i.normalWS), albedo, 0, _FarCenter.w, 1, _EnvIntensity, i.positionCS, 1);
                 color = JS_ApplyHeightFog(color, i.positionWS);
                 color = MixFog(color, i.fogCoord);
                 float2 fromCenter = abs(i.positionWS.xz - _FarCenter.xy);

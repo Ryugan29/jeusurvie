@@ -174,7 +174,7 @@ Shader "JeuSurvie/Terrain"
                         albedo *= 1.0 - 0.35 * puddle;
                     }
                 }
-                half3 color = JS_LightPBR(P, normalWS, albedo, 0, rough, 1, _EnvIntensity, i.positionCS);
+                half3 color = JS_LightPBR(P, normalWS, albedo, 0, rough, 1, _EnvIntensity, i.positionCS, 1);
                 color = JS_ApplyHeightFog(color, P);
                 color = MixFog(color, i.fogCoord);
                 return half4(color, 1);
