@@ -17,6 +17,7 @@ Shader "JeuSurvie/NaturePBR"
         _Glow ("Night glow (mushrooms)", Float) = 0
         _RoughnessMap ("Roughness map (glTF: green channel)", 2D) = "white" {}
         _UseRoughnessMap ("Roughness from map", Float) = 0
+        _UseMetallicMap ("Metallic from map (glTF: blue channel, × Metallic)", Float) = 0
         _GlowMap ("Night glow colour map (glTF emissive)", 2D) = "black" {}
         _UseGlowMap ("Night glow from map", Float) = 0
         _Cutoff ("Alpha cutoff", Range(0, 1)) = 0
@@ -43,6 +44,7 @@ Shader "JeuSurvie/NaturePBR"
             float _UseVertexColor;
             float _Glow;
             float _UseRoughnessMap;
+            float _UseMetallicMap;
             float _UseGlowMap;
             float _Cutoff;
             float _Cull;
@@ -114,12 +116,19 @@ Shader "JeuSurvie/NaturePBR"
                 }
                 // Rain: smoother (sharper sky rim) and darker, never more sky light (Surfaces.Wet).
                 float w = saturate(_JS_Wet.x);
-                // Characters carry their roughness in a map (glTF metallic-roughness, green channel); the rest uses one value.
+                // Characters and the tools carry their roughness in a map (glTF metallic-roughness, green channel), the metal
+                // tools their metal too (blue channel); the rest uses one value each.
                 float roughBase = _Roughness;
-                if (_UseRoughnessMap > 0.5) roughBase = SAMPLE_TEXTURE2D(_RoughnessMap, sampler_RoughnessMap, i.uv).g;
+                float metallic = _Metallic;
+                if (_UseRoughnessMap > 0.5 || _UseMetallicMap > 0.5)
+                {
+                    float4 mr = SAMPLE_TEXTURE2D(_RoughnessMap, sampler_RoughnessMap, i.uv);
+                    if (_UseRoughnessMap > 0.5) roughBase = mr.g;
+                    if (_UseMetallicMap > 0.5) metallic = _Metallic * mr.b;
+                }
                 float rough = min(roughBase, max(0.12, roughBase * (1.0 - 0.55 * w)));
                 albedo *= 1.0 - 0.3 * w;
-                half3 color = JS_LightPBR(i.positionWS, N, albedo, _Metallic, rough, 1, _EnvIntensity, i.positionCS);
+                half3 color = JS_LightPBR(i.positionWS, N, albedo, metallic, rough, 1, _EnvIntensity, i.positionCS);
                 // Night glow: mushrooms tint their own texture with the magic colour; a glow map (glTF emissive, e.g. the
                 // elf's veins) glows in its own colours, scaled by how deep the night is (the 1.6 brings it to the mushrooms' level),
                 // and keeps a faint glow by day (about a sixth of the night's) so the veins never go out completely.

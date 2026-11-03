@@ -1,13 +1,12 @@
-// Ports of babylon/animated-model, locomotion-animator and capsule:
+// Ports of babylon/animated-model and capsule:
 //   - an animated model (character, creature) loaded from glTF (glTFast, legacy animation clips), fitted to a height with its
 //     feet on the origin of its « pivot » (position = feet, yaw = heading), materials converted to NaturePBR (surfaces by name,
-//     optional tints, PBR maps and LOD copies carried over from the glTF);
-//   - animation retargeting from another file with the same skeleton (hero → heroine): bones paired by name, rotations copied,
-//     the pelvis keeps its stride translation shifted by the rest-pose difference (moveBones);
-//   - locomotion: Idle / Walk / Run always playing, weights faded by the real ground speed (render-data/character-motion).
+//     optional tints, PBR maps and LOD copies carried over from the glTF).
+// The heroine's animations are her own clips (ClipLibrary, CharacterAnimator): no other skeleton is copied any more.
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using JeuSurvie.Core.RenderData;
 using UnityEngine;
@@ -138,14 +137,20 @@ namespace JeuSurvie.Characters
         // What a glTF material may bring beyond its colour (SourceMaterialGenerator stores it on the source material): relief,
         // roughness map, night-glow map, alpha cutout and double-sided drawing. Models without them keep the shader defaults.
         private static readonly string[] MapProperties = { "_BumpMap", "_RoughnessMap", "_GlowMap" };
-        private static readonly string[] MapSettings = { "_BumpScale", "_UseRoughnessMap", "_UseGlowMap", "_Glow", "_Cutoff", "_Cull" };
+        private static readonly string[] MapSettings = { "_BumpScale", "_UseRoughnessMap", "_UseGlowMap", "_UseMetallicMap", "_Glow" };
+        private static readonly string[] AlphaSettings = { "_Cutoff", "_Cull" };
 
-        public static void CopyMaps(Material source, Material target)
+        /// <summary>The maps a glTF material brought (SourceMaterialGenerator) onto the converted material; its metal factor too
+        /// when its metal comes from the map (the copper and iron tools), otherwise the target keeps its surface's value.
+        /// alpha: also its cutout and double-sided drawing (characters; the model library sets those itself).</summary>
+        public static void CopyMaps(Material source, Material target, bool alpha = true)
         {
             foreach (string p in MapProperties)
                 if (source.HasProperty(p) && target.HasProperty(p) && source.GetTexture(p) != null) target.SetTexture(p, source.GetTexture(p));
-            foreach (string p in MapSettings)
+            foreach (string p in alpha ? MapSettings.Concat(AlphaSettings) : MapSettings)
                 if (source.HasProperty(p) && target.HasProperty(p)) target.SetFloat(p, source.GetFloat(p));
+            if (source.HasProperty("_UseMetallicMap") && source.GetFloat("_UseMetallicMap") > 0.5f && target.HasProperty("_Metallic"))
+                target.SetFloat("_Metallic", source.GetFloat("_Metallic"));
         }
 
         /// <summary>Plays `name` looping (the demon's Idle).</summary>
@@ -156,61 +161,6 @@ namespace JeuSurvie.Characters
             s.wrapMode = WrapMode.Loop;
             model.Animation.Play(name);
             return true;
-        }
-    }
-
-    /// <summary>
-    /// Hero animations replayed on the heroine (retargetAnimations): the hidden hero skeleton is animated (Idle, Walk, Run blended
-    /// by the locomotion weights) and, after animation, its bone rotations are copied to the heroine bones of the same name; the
-    /// pelvis also takes its translation, shifted by the rest-pose difference.
-    /// </summary>
-    public sealed class RetargetedLocomotion : MonoBehaviour
-    {
-        private static readonly string[] Clips = { "Idle", "Walk", "Run" };
-        private AnimatedModel source, target;
-        private readonly List<(Transform from, Transform to)> bones = new List<(Transform, Transform)>();
-        private readonly List<(Transform from, Transform to, Vector3 delta)> movedBones = new List<(Transform, Transform, Vector3)>();
-        private double[] weights = { 1, 0, 0 };
-        public readonly List<string> MissingBones = new List<string>();
-
-        public static RetargetedLocomotion Create(AnimatedModel source, AnimatedModel target, string[] moveBones)
-        {
-            if (source.Animation == null) throw new InvalidOperationException("le héros n'a pas d'animations");
-            foreach (string clip in Clips) if (source.Animation[clip] == null) throw new InvalidOperationException("animation absente de la source : " + clip);
-            RetargetedLocomotion r = target.Pivot.gameObject.AddComponent<RetargetedLocomotion>();
-            r.source = source;
-            r.target = target;
-            var moved = new HashSet<string>(moveBones);
-            foreach (var kv in source.Nodes)
-            {
-                if (kv.Value.GetComponent<Renderer>() != null || kv.Value == source.Pivot) continue;
-                if (!target.Nodes.TryGetValue(kv.Key, out Transform to)) { r.MissingBones.Add(kv.Key); continue; }
-                r.bones.Add((kv.Value, to));
-                if (moved.Contains(kv.Key)) r.movedBones.Add((kv.Value, to, to.localPosition - kv.Value.localPosition));
-            }
-            foreach (string clip in Clips)
-            {
-                AnimationState s = source.Animation[clip];
-                s.wrapMode = WrapMode.Loop;
-                s.layer = 0;
-                s.enabled = true;
-                s.weight = clip == "Idle" ? 1 : 0;
-            }
-            return r;
-        }
-
-        /// <summary>Every frame: `speedMps` is the character ground speed.</summary>
-        public void UpdateLocomotion(double dtSeconds, double speedMps)
-        {
-            weights = CharacterMotion.FadeWeights(weights, CharacterMotion.For(speedMps), dtSeconds, CharacterMotion.FadeSeconds);
-            for (int i = 0; i < Clips.Length; i++) source.Animation[Clips[i]].weight = (float)weights[i];
-        }
-
-        private void LateUpdate()
-        {
-            if (source == null || target == null) return;
-            foreach (var (from, to) in bones) to.localRotation = from.localRotation;
-            foreach (var (from, to, delta) in movedBones) to.localPosition = from.localPosition + delta;
         }
     }
 

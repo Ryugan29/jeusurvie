@@ -46,16 +46,38 @@ namespace JeuSurvie.Core.Physics
         public static readonly double MaxColliderExtentM = FootprintByModel.Values.Max(f => MathUtil.Hypot(f.Ox, f.Oz) + f.R);
 
         /// <summary>Obstacle circle of a resource, or null if the player walks through it.</summary>
-        public static Circle? ColliderOf(Resource resource)
+        public static Circle? ColliderOf(Resource resource) =>
+            ColliderAt(ResourceModels.ModelKeyFor(resource), resource.X, resource.Z, resource.Rotation, resource.Scale);
+
+        /// <summary>Obstacle circle of `model` placed at (x, z) turned by `rotation` (turns) and scaled, or null.</summary>
+        public static Circle? ColliderAt(string model, double x, double z, double rotation, double scale)
         {
-            if (!FootprintByModel.TryGetValue(ResourceModels.ModelKeyFor(resource), out Footprint f)) return null;
-            double angle = resource.Rotation * 2 * Math.PI, c = Math.Cos(angle), s = Math.Sin(angle), sc = resource.Scale;
+            Footprint f;
+            if (!FootprintByModel.TryGetValue(model, out f) && !HarvestFootprints.TryGetValue(model, out f)) return null;
+            double angle = rotation * 2 * Math.PI, c = Math.Cos(angle), s = Math.Sin(angle), sc = scale;
             return new Circle(
-                resource.X + sc * (f.Ox * c + f.Oz * s),
-                resource.Z + sc * (-f.Ox * s + f.Oz * c),
+                x + sc * (f.Ox * c + f.Oz * s),
+                z + sc * (-f.Ox * s + f.Oz * c),
                 f.R * sc,
                 f.H * sc);
         }
+
+        /// <summary>
+        /// Harvest props (ore deposits are pack rocks with nuggets, so they keep the rocks' footprints). Kept apart from
+        /// FootprintByModel, whose content belongs to the ported world (MaxColliderExtentM, ObstacleIndex reach).
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, Footprint> HarvestFootprints = new Dictionary<string, Footprint>
+        {
+            { "Gisement_Cuivre_1", new Footprint(0.11, 0.35, 1.45, 2) },
+            { "Gisement_Cuivre_2", new Footprint(0.18, 0.08, 1.35, 1.85) },
+            { "Gisement_Cuivre_3", new Footprint(0.11, 0.85, 1.5, 2) },
+            { "Gisement_Fer_1", new Footprint(0.11, 0.35, 1.45, 2) },
+            { "Gisement_Fer_2", new Footprint(0.18, 0.08, 1.35, 1.85) },
+            { "Gisement_Fer_3", new Footprint(0.11, 0.85, 1.5, 2) },
+            { "Souche_Feuillu", new Footprint(0, 0, 0.32, 0.45) },
+            { "Souche_Morte", new Footprint(0, 0, 0.32, 0.45) },
+            { "Tronc_Camp", new Footprint(0, 0, 0.7, 0.45) },
+        };
 
         private const double EdgeToleranceM = 1e-6;
 

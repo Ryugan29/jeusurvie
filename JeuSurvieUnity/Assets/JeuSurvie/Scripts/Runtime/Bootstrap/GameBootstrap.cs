@@ -10,11 +10,13 @@ using JeuSurvie.Atmosphere;
 using JeuSurvie.Characters;
 using JeuSurvie.Core.App;
 using JeuSurvie.Core.Config;
+using JeuSurvie.Core.Items;
 using JeuSurvie.Core.Physics;
 using JeuSurvie.Core.RenderData;
 using JeuSurvie.Core.Shared;
 using JeuSurvie.Core.Storage;
 using JeuSurvie.Core.Survival;
+using JeuSurvie.Gameplay;
 using JeuSurvie.Core.World;
 using JeuSurvie.InputDevices;
 using JeuSurvie.Rendering;
@@ -70,13 +72,15 @@ namespace JeuSurvie.Bootstrap
         private FarTerrainRenderer far;
         private RainRenderer rain;
         private NightMagicRenderer nightMagic;
-        private ModelLibrary library;
+        private ModelLibrary library, objects;
+        private GameplayRoot gameplay;
         private VegetationRenderer vegetation;
         private GroundCoverRenderer cover;
         private bool vegetationLoaded;
         private GameObject capsule;
         private AnimatedModel heroine;
-        private RetargetedLocomotion heroineAnimator;
+        private CharacterAnimator heroineAnimator;
+        private IReadOnlyDictionary<string, ClipInfo> heroineClips;
         private LeafOutfit outfit;
         private AnimatedModel demon;
         private bool demonPlaced = true;
@@ -105,6 +109,26 @@ namespace JeuSurvie.Bootstrap
         private string captureDir;
 
         private static string ArgumentsOf(string text) => text ?? "";
+
+        // --- For the PlayMode tests (a normal game never sets them: no effect) ---------------------------------------------
+        /// <summary>The running harvest, once the game is ready.</summary>
+        public GameplayRoot Gameplay => ready ? gameplay : null;
+        /// <summary>Keys and buttons a test presses, added to the real input (Pressed is emptied after each frame).</summary>
+        public readonly RawInputFrame TestInput = new RawInputFrame();
+        /// <summary>Mode a test imposes (in batch mode the cursor cannot be captured, so the game would stay paused).</summary>
+        public InputMode? TestMode;
+
+        /// <summary>
+        /// Puts the heroine at (x, z) facing `heading` (as if she had walked there); the camera looks the same way unless a
+        /// test chooses its own view (close-ups of the tool in her hand).
+        /// </summary>
+        public void PlacePlayerForTests(double x, double z, double heading, double? cameraYaw = null, double? distance = null, double? pitch = null)
+        {
+            double y = Ground(x, z) ?? session.Current.Y;
+            session.Current = session.Previous = new Vec3(x, y, z);
+            heroineHeading = heading;
+            rig = new CameraRig(cameraYaw ?? heading, pitch ?? rig.Pitch, distance ?? rig.Distance);
+        }
 
         private void Awake()
         {
@@ -150,6 +174,7 @@ namespace JeuSurvie.Bootstrap
             cam.fieldOfView = Mathf.Rad2Deg * 1.0f;
             cam.clearFlags = CameraClearFlags.Skybox;
             camGo.tag = "MainCamera";
+            camGo.AddComponent<AudioListener>(); // the harvest's sounds are heard from the camera
             ApplyDistances(quality);
             lighting = new SceneLighting(setup != null ? setup.skyShader : Shader.Find("JeuSurvie/Sky"), fogDistanceM, -6, quality.Sky.Clouds);
             if (iblEnabled) skyEnvironment = new SkyEnvironment(quality.Sky.EnvProbeSize, quality.Sky.EnvProbeRefreshS);
@@ -170,11 +195,18 @@ namespace JeuSurvie.Bootstrap
                 hud.SetLoading("Chargement des arbres, des rochers et de l’herbe…");
                 var keys = new HashSet<string>(ResourceModels.AllVegetationModels());
                 if (cover != null) foreach (var kv in GroundCover.Models) foreach (string k in kv.Value) keys.Add(k);
+                foreach (string k in VegetationInstances.HarvestRangeByModel.Keys) keys.Add(k); // the harvest layer (ore, stumps, soil…)
                 Task load = library.LoadAsync(keys);
                 yield return new WaitUntil(() => load.IsCompleted);
                 vegetationLoaded = load.Status == TaskStatus.RanToCompletion;
                 if (!vegetationLoaded) Debug.LogError("Modèles de végétation illisibles : le jeu continue sans. " + load.Exception?.GetBaseException().Message);
             }
+            // Tools and objects (in hand, on the ground): models/objets.
+            objects = new ModelLibrary(Path.Combine(modelsDir, "objets"), ShaderOf(s => s.foliageShader, "JeuSurvie/Foliage"), ShaderOf(s => s.naturePbrShader, "JeuSurvie/NaturePBR"))
+                { CompressLargeTextures = true }; // the HD tools' 2048 px maps
+            Task loadObjects = objects.LoadAsync(new HashSet<string>(ItemCatalog.All.Select(d => d.Model)));
+            yield return new WaitUntil(() => loadObjects.IsCompleted);
+            if (loadObjects.Status != TaskStatus.RanToCompletion) Debug.LogError("Modèles d’outils illisibles : ils ne seront pas montrés. " + loadObjects.Exception?.GetBaseException().Message);
             if (!options.Off("magie")) nightMagic = new NightMagicRenderer(ShaderOf(s => s.particleShader, "JeuSurvie/Particle"));
             pipeline.Apply(quality);
             lighting.SetAerialPerspective(quality.Post.AerialPerspective && pipeline.HasAtmosphereFeature);
@@ -202,24 +234,34 @@ namespace JeuSurvie.Bootstrap
             if (heroine != null) capsule.SetActive(false);
             if (heroine != null && !options.Off("tenue")) outfit = AttachOutfit(heroine);
 
-            // --- World and session
-            int workers = Math.Min(3, Math.Max(1, SystemInfo.processorCount - 1));
-            source = new ChunkWorkerSource(seed, workers, coverEnabled && !options.Off("vegetation"));
-            loading = new ChunkLoading<ChunkPayload>(source, MaxNewChunksPerFrame);
+            // --- World and session (the save, if any, puts the player back where she was; the camp stays where the seed puts it)
             if (options.Get("lieu") == "montagne")
             {
                 Summit summit = SummitSearch.Find(seed, 6000, 250);
                 spawn = new Vec2XZ(summit.X, summit.Z);
             }
             else spawn = new Vec2XZ(options.Coord("x"), options.Coord("z"));
-            obstacles = new ObstacleIndex(seed);
-            session = new GameSession(spawn.X, spawn.Z, Ground, ObstaclesNear);
-            double moment = Moments.TryGetValue(options.Get("heure") ?? "", out double m) ? m : Moments["matin"];
-            session.SetTimeOfDay(moment);
-            replan = new ReplanGate();
             double yaw = options.Number("regard", 0.6), pitch = options.Number("inclinaison", 0.35);
+            bool keepSave = captureDir == null && !Application.isBatchMode && !options.Off("sauvegarde");
+            gameplay = GameplayRoot.Begin(seed, spawn.X, spawn.Z, yaw, keepSave ? new FileSaveStore(seed) : null, creatureColliders, Ground, out SaveData saved);
+            int workers = Math.Min(3, Math.Max(1, SystemInfo.processorCount - 1));
+            source = new ChunkWorkerSource(seed, workers, coverEnabled && !options.Off("vegetation"), gameplay.Camp);
+            loading = new ChunkLoading<ChunkPayload>(source, MaxNewChunksPerFrame);
+            obstacles = new ObstacleIndex(seed);
+            session = saved != null ? new GameSession(saved.X, saved.Z, Ground, ObstaclesNear) : new GameSession(spawn.X, spawn.Z, Ground, ObstaclesNear);
+            double moment = Moments.TryGetValue(options.Get("heure") ?? "", out double m) ? m : Moments["matin"];
+            if (saved != null) session.PlayTicks = saved.PlayTicks;
+            if (saved != null && options.Get("heure") == null) session.WorldTicks = saved.WorldTicks; // -heure still chooses the moment
+            else session.SetTimeOfDay(moment);
+            replan = new ReplanGate();
             rig = new CameraRig(yaw, pitch, MathUtil.Clamp(options.Number("recul", 7), CameraRigs.MinDistance, CameraRigs.MaxDistance));
-            heroineHeading = rig.Yaw + options.Number("cap", 0); // -cap 3.14: she faces the camera (photos of her front)
+            heroineHeading = saved != null ? saved.Heading : rig.Yaw + options.Number("cap", 0); // -cap 3.14: she faces the camera (photos of her front)
+            gameplay.AttachScene(new GameplayScene
+            {
+                Hud = hud, Vegetation = vegetation, Nature = library, Objects = objects, Heroine = heroine,
+                Clips = heroineClips, ParticleShader = ShaderOf(s => s.particleShader, "JeuSurvie/Particle"),
+            });
+            hud.NewGameRequested += () => gameplay.NewGame();
 
             hud.OverlayClicked += () => input.RequestCapture();
             hud.PresetSelected += SelectPreset;
@@ -269,17 +311,18 @@ namespace JeuSurvie.Bootstrap
 
         private async Task<AnimatedModel> LoadHeroine(string modelsDir, Shader pbr)
         {
-            AnimatedModel hero = await CharacterLoader.LoadAsync(Path.Combine(modelsDir, "characters", "hero.gltf"), HeroineHeightM, pbr, null, false);
-            AnimatedModel model = await CharacterLoader.LoadAsync(Path.Combine(modelsDir, "characters", "heroine", "heroine.gltf"), HeroineHeightM, pbr);
+            string dir = Path.Combine(modelsDir, "characters", "heroine");
+            AnimatedModel model = await CharacterLoader.LoadAsync(Path.Combine(dir, "heroine.gltf"), HeroineHeightM, pbr);
             try
             {
-                heroineAnimator = RetargetedLocomotion.Create(hero, model, new[] { "pelvis" });
-                if (heroineAnimator.MissingBones.Count > 0) Debug.LogWarning("Os du héros absents de l’héroïne : " + string.Join(", ", heroineAnimator.MissingBones));
+                // Her own clips (Tools~/Blender/animations.py): walking, running, carrying a tool and the harvest gestures.
+                heroineClips = await ClipLibrary.AddAsync(model, Path.Combine(dir, "animations.gltf"), Path.Combine(dir, "animations.json"));
+                heroineAnimator = CharacterAnimator.Create(model, heroineClips);
             }
             catch (Exception)
             {
                 Destroy(model.Pivot.gameObject); // no heroine frozen in T: the capsule stays
-                Destroy(hero.Pivot.gameObject);
+                heroineClips = null;
                 throw;
             }
             return model;
@@ -393,6 +436,7 @@ namespace JeuSurvie.Bootstrap
         {
             if (!vegetationLoaded) return creatureColliders;
             List<Circle> list = obstacles.Near(x, z);
+            gameplay?.AdjustObstacles(list, x, z, x, z); // what was cut no longer blocks; stumps, ore and the camp do
             list.AddRange(creatureColliders);
             return list;
         }
@@ -401,6 +445,7 @@ namespace JeuSurvie.Bootstrap
         {
             if (!vegetationLoaded) return creatureColliders;
             List<Circle> list = obstacles.Along(ax, az, bx, bz);
+            gameplay?.AdjustObstacles(list, Math.Min(ax, bx), Math.Min(az, bz), Math.Max(ax, bx), Math.Max(az, bz));
             list.AddRange(creatureColliders);
             return list;
         }
@@ -415,6 +460,7 @@ namespace JeuSurvie.Bootstrap
                 double? y = Ground(x, z);
                 if (y == null) return false;
                 if (vegetationLoaded && Colliders.Overlaps(x, z, 1.5, obstacles.Near(x, z))) continue;
+                if (gameplay.Camp.Covers(x, z, -3)) continue; // not in the middle of the camp (its edge is fine: the demon stays in view)
                 model.Pivot.position = new Vector3((float)x, (float)y.Value, (float)z);
                 model.Pivot.rotation = Quaternion.Euler(0, (float)((CharacterMotion.HeadingOf(spawn.X - x, spawn.Z - z) ?? 0) * Mathf.Rad2Deg), 0);
                 model.SetVisible(true);
@@ -434,9 +480,44 @@ namespace JeuSurvie.Bootstrap
             return i < Weather.Kinds.Length ? Weather.Kinds[i] : (WeatherKind?)null;
         }
 
-        private void ShowMode() => hud.ShowMode(mode == InputMode.Playing, mode == InputMode.Paused);
+        private void ShowMode() => hud.ShowMode(mode == InputMode.Playing || mode == InputMode.Menu, mode == InputMode.Paused);
 
-        private void OnApplicationFocus(bool hasFocus) => input?.OnFocusChanged(hasFocus);
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            input?.OnFocusChanged(hasFocus);
+            if (hasFocus || !ready) return;
+            if (mode == InputMode.Menu) // the bag was open: losing the window pauses like the game does
+            {
+                gameplay.CloseInventory();
+                mode = InputMode.Paused;
+                ShowMode();
+            }
+            gameplay.SaveNow("perte du focus", session.WorldTicks);
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (ready) gameplay.SaveNow("sortie", session.WorldTicks);
+        }
+
+        /// <summary>Tab opens the bag (the cursor is freed for it, the game goes on); Tab or Escape closes it.</summary>
+        private void HandleBag(RawInputFrame raw)
+        {
+            bool toggle = raw.Pressed.Contains(GameKey.Inventory);
+            if (mode == InputMode.Playing && toggle)
+            {
+                mode = InputModes.OpenMenu(mode);
+                input.ReleaseCapture();
+                gameplay.OpenInventory();
+                ShowMode();
+            }
+            else if (mode == InputMode.Menu && (toggle || raw.Pressed.Contains(GameKey.Cancel)))
+            {
+                gameplay.CloseInventory();
+                mode = InputMode.Paused; // back to the game once the cursor is captured again; if refused, the pause overlay invites a click
+                input.RequestCapture();
+            }
+        }
 
         // --- Frame loop ----------------------------------------------------------------------------------------------------
 
@@ -449,10 +530,22 @@ namespace JeuSurvie.Bootstrap
 
             // A press on a button (« Réglages graphiques »…) is for the interface: it must not start the game on its way.
             bool overControl = hud.IsOverControl(hud.ScreenToPanel(input.PointerPosition));
-            RawInputFrame raw = input.Sample(hud.SettingsOpen || overControl);
-            if (raw.ClickedGame && mode != InputMode.Playing && !hud.SettingsOpen) input.RequestCapture();
+            RawInputFrame raw = input.Sample(hud.SettingsOpen || overControl || mode == InputMode.Menu);
+            if (TestMode != null && mode != TestMode.Value)
+            {
+                mode = TestMode.Value;
+                ShowMode();
+            }
+            raw.UseHeld |= TestInput.UseHeld;
+            raw.Pressed.AddRange(TestInput.Pressed);
+            foreach (GameKey k in TestInput.Down) raw.Down.Add(k);
+            TestInput.Pressed.Clear();
+            if (raw.ClickedGame && mode != InputMode.Playing && mode != InputMode.Menu && !hud.SettingsOpen) input.RequestCapture();
+            InputMode before = mode;
             foreach (ModeEvent e in raw.ModeEvents) mode = InputModes.Next(mode, e);
             if (raw.ModeEvents.Count > 0) ShowMode();
+            if (mode == InputMode.Paused && before != InputMode.Paused) gameplay.SaveNow("pause", session.WorldTicks);
+            HandleBag(raw);
             foreach (GameKey key in raw.Pressed)
             {
                 switch (key)
@@ -471,7 +564,7 @@ namespace JeuSurvie.Bootstrap
                 }
             }
             bool running = InputModes.SimulationRuns(mode);
-            if (running) rig = CameraRigs.ApplyZoom(CameraRigs.ApplyLook(rig, raw.LookDx, raw.LookDy, MouseSensitivity), raw.Wheel);
+            if (InputModes.WorldActionsAllowed(mode)) rig = CameraRigs.ApplyZoom(CameraRigs.ApplyLook(rig, raw.LookDx, raw.LookDy, MouseSensitivity), raw.Wheel);
 
             Vec2XZ direction = CameraRigs.WishDirection(raw.Down.Contains(GameKey.Forward), raw.Down.Contains(GameKey.Back), raw.Down.Contains(GameKey.Left), raw.Down.Contains(GameKey.Right), rig.Yaw);
             bool slow = raw.Down.Contains(GameKey.Slow);
@@ -486,13 +579,15 @@ namespace JeuSurvie.Bootstrap
                 {
                     terrain.Remove(gone.Key);
                     vegetation.Remove(gone.Key);
+                    gameplay.Untrack(gone.Key);
                     cover?.Remove(gone.Key);
                 }
             }
             foreach (LoadedChunk<ChunkPayload> chunk in loading.Collect())
             {
                 terrain.Add(chunk.Key, chunk.Data.Cx, chunk.Data.Cz, chunk.Render.Mesh);
-                vegetation.Add(chunk.Key, chunk.Data.Cx, chunk.Data.Cz, chunk.Render.Vegetation);
+                // Shown as the save left it: what was harvested is not drawn (stumps, shrunk rocks, tilled soil instead).
+                vegetation.Add(chunk.Key, chunk.Data.Cx, chunk.Data.Cz, gameplay.Track(chunk.Key, chunk.Data.Cx, chunk.Data.Cz, chunk.Render.Vegetation, chunk.Render.Harvestables));
                 cover?.Add(chunk.Key, chunk.Data.Cx, chunk.Data.Cz, chunk.Render.GroundCover);
             }
 
@@ -502,10 +597,13 @@ namespace JeuSurvie.Bootstrap
             if (heroine != null)
             {
                 double? wish = CharacterMotion.HeadingOf(direction.X, direction.Z);
+                double? work = gameplay.FaceHeading; // during a gesture she turns to what she works
                 if (running && wish != null) heroineHeading = CharacterMotion.TurnToward(heroineHeading, wish.Value, CharacterMotion.TurnRateRadPerS * frameMs / 1000);
+                else if (running && work != null) heroineHeading = CharacterMotion.TurnToward(heroineHeading, work.Value, 2 * CharacterMotion.TurnRateRadPerS * frameMs / 1000);
                 heroine.Pivot.position = new Vector3((float)shown.X, (float)shown.Y, (float)shown.Z);
                 heroine.Pivot.rotation = Quaternion.Euler(0, (float)(heroineHeading * Mathf.Rad2Deg), 0);
-                heroineAnimator?.UpdateLocomotion(frameMs / 1000, running ? CharacterMotion.HorizontalSpeed(session.Previous, session.Current, 1.0 / Balance.SimHz) : 0);
+                heroineAnimator?.Tick(frameMs / 1000, running ? CharacterMotion.HorizontalSpeed(session.Previous, session.Current, 1.0 / Balance.SimHz) : 0,
+                    gameplay != null && gameplay.HoldingTool);
             }
             if (demon != null && !demonPlaced) demonPlaced = PlaceDemon(demon);
             CameraPose pose = CameraRigs.Pose(rig, new Vec3(shown.X, shown.Y + EyeHeight, shown.Z), Ground, ObstaclesAlong);
@@ -514,6 +612,11 @@ namespace JeuSurvie.Bootstrap
 
             // View-sector culling (-elagage=0: without): vegetation out of the camera field is not drawn.
             ViewCull? view = cullEnabled ? new ViewCull(ViewSectors.For(rig.Yaw, cam.fieldOfView * Mathf.Deg2Rad, cam.aspect), cam.transform.position.x, cam.transform.position.z) : (ViewCull?)null;
+            // The harvest: aim, gestures, impacts, bag, regrowth, autosave (also when the view sector culling is off).
+            ViewCull sight = view ?? new ViewCull(ViewSectors.For(rig.Yaw, cam.fieldOfView * Mathf.Deg2Rad, cam.aspect), cam.transform.position.x, cam.transform.position.z);
+            gameplay.NoteWorldTicks(session.WorldTicks);
+            gameplay.Frame(new FrameInfo(frameMs / 1000, session.PlayTicks, shown, rig.Yaw, heroineHeading, raw, mode,
+                running && (direction.X != 0 || direction.Z != 0), sight));
             vegetation.Update(here.X, here.Z, view);
             far?.Update(here.X, here.Z);
             cover?.Update(here.X, here.Z, view);
@@ -524,6 +627,7 @@ namespace JeuSurvie.Bootstrap
             WeatherState weather = CurrentWeather(session.ElapsedWorldSeconds);
             AtmosphereData atmosphere = Atmospheres.For(Lights.For(time), weather, Atmospheres.LightningFlash(seed, realClockS, weather.Storm));
             Lighting light = atmosphere.Light;
+            gameplay.SetBrightness(Atmospheres.SceneBrightness(light));
             double windStrength = windBase * (WindCalm + WindGusts * atmosphere.Wind);
             Shader.SetGlobalVector(ShaderGlobals.Wind, new Vector4((float)windTime, (float)windStrength, 0, 0));
             outfit?.Update(windStrength, Foliage.WindGust(shown.X, shown.Z, windTime), atmosphere.Wetness);

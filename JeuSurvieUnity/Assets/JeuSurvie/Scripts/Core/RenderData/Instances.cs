@@ -76,9 +76,20 @@ namespace JeuSurvie.Core.RenderData
 
         public static double RangeM(string modelKey)
         {
-            if (!RangeByModel.TryGetValue(modelKey, out double r)) throw new ArgumentException("modèle de végétation inconnu : " + modelKey);
+            if (!RangeByModel.TryGetValue(modelKey, out double r) && !HarvestRangeByModel.TryGetValue(modelKey, out r))
+                throw new ArgumentException("modèle de végétation inconnu : " + modelKey);
             return r;
         }
+
+        /// <summary>Models of the harvest layer (Gameplay/WorldFeatures): big ones as far as rocks, small ones as far as grass.</summary>
+        public static readonly IReadOnlyDictionary<string, double> HarvestRangeByModel = new Dictionary<string, double>
+        {
+            { "Gisement_Cuivre_1", 280 }, { "Gisement_Cuivre_2", 280 }, { "Gisement_Cuivre_3", 280 },
+            { "Gisement_Fer_1", 280 }, { "Gisement_Fer_2", 280 }, { "Gisement_Fer_3", 280 },
+            { "Souche_Feuillu", 280 }, { "Souche_Morte", 280 }, { "Tronc_Camp", 280 },
+            { "Branche_Sol_1", 110 }, { "Branche_Sol_2", 110 }, { "Terre_Meuble", 110 }, { "Terre_Labouree", 110 },
+            { "Herbe_Sauvage", 110 }, { "Flower_4_Group", 110 },
+        };
 
         /// <summary>A chunk batch is drawn if the nearest edge of chunk (cx, cz) is within range of the player.</summary>
         public static bool Visible(int cx, int cz, double px, double pz, double rangeM)
@@ -112,7 +123,8 @@ namespace JeuSurvie.Core.RenderData
     public static class ShadowCasters
     {
         public static readonly ResourceKind[] Kinds = { ResourceKind.Tree, ResourceKind.Pine, ResourceKind.Bush, ResourceKind.Rock };
-        public static readonly string[] Models = Kinds.SelectMany(k => ResourceModels.VegetationModels[k]).Distinct().ToArray();
+        public static readonly string[] Models = Kinds.SelectMany(k => ResourceModels.VegetationModels[k])
+            .Concat(VegetationInstances.HarvestRangeByModel.Where(kv => kv.Value >= 280).Select(kv => kv.Key)).Distinct().ToArray();
         private static readonly HashSet<string> Casters = new HashSet<string>(Models);
         public static bool CastsShadow(string modelKey) => Casters.Contains(modelKey);
     }

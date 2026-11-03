@@ -10,7 +10,15 @@ using UnityEngine.InputSystem;
 
 namespace JeuSurvie.InputDevices
 {
-    public enum GameKey { Forward, Back, Left, Right, Slow, Moment1, Moment2, Moment3, Moment4, CycleSpeed, Weather, TogglePanel, OpenSettings }
+    /// <summary>
+    /// Keys by physical position. Demo shortcuts on F1–F6 (moments, ×60 cycle, weather); 1–8 = hotbar; E = gather or pick up;
+    /// Tab = bag; Cancel = Escape while the cursor is free (closes the bag).
+    /// </summary>
+    public enum GameKey
+    {
+        Forward, Back, Left, Right, Slow, Moment1, Moment2, Moment3, Moment4, CycleSpeed, Weather, TogglePanel, OpenSettings,
+        Hotbar1, Hotbar2, Hotbar3, Hotbar4, Hotbar5, Hotbar6, Hotbar7, Hotbar8, Gather, Inventory, Cancel,
+    }
 
     public sealed class RawInputFrame
     {
@@ -19,6 +27,8 @@ namespace JeuSurvie.InputDevices
         public double LookDx, LookDy, Wheel;
         public readonly List<ModeEvent> ModeEvents = new List<ModeEvent>();
         public bool ClickedGame;
+        /// <summary>Left button held while the cursor is captured (use the tool).</summary>
+        public bool UseHeld;
 
         public void Clear()
         {
@@ -27,6 +37,14 @@ namespace JeuSurvie.InputDevices
             ModeEvents.Clear();
             LookDx = LookDy = Wheel = 0;
             ClickedGame = false;
+            UseHeld = false;
+        }
+
+        /// <summary>Hotbar cell (0–7) pressed this frame, or −1.</summary>
+        public int HotbarPressed()
+        {
+            foreach (GameKey k in Pressed) if (k >= GameKey.Hotbar1 && k <= GameKey.Hotbar8) return k - GameKey.Hotbar1;
+            return -1;
         }
     }
 
@@ -39,6 +57,9 @@ namespace JeuSurvie.InputDevices
         private bool focusLost;
 
         public bool Captured => captured;
+#if ENABLE_INPUT_SYSTEM && JEUSURVIE_INPUTSYSTEM
+        private static readonly Key[] HotbarDigits = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8 };
+#endif
 
         /// <summary>Mouse position in screen pixels (origin bottom-left).</summary>
         public Vector2 PointerPosition
@@ -101,14 +122,19 @@ namespace JeuSurvie.InputDevices
                 if (k.aKey.isPressed) frame.Down.Add(GameKey.Left);
                 if (k.dKey.isPressed) frame.Down.Add(GameKey.Right);
                 if (k.leftShiftKey.isPressed || k.rightShiftKey.isPressed) frame.Down.Add(GameKey.Slow);
-                if (k.digit1Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment1);
-                if (k.digit2Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment2);
-                if (k.digit3Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment3);
-                if (k.digit4Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment4);
-                if (k.digit5Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.CycleSpeed);
-                if (k.digit6Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Weather);
+                if (k.f1Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment1);
+                if (k.f2Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment2);
+                if (k.f3Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment3);
+                if (k.f4Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Moment4);
+                if (k.f5Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.CycleSpeed);
+                if (k.f6Key.wasPressedThisFrame) frame.Pressed.Add(GameKey.Weather);
+                for (int i = 0; i < HotbarDigits.Length; i++)
+                    if (k[HotbarDigits[i]].wasPressedThisFrame) frame.Pressed.Add(GameKey.Hotbar1 + i);
+                if (k.eKey.wasPressedThisFrame) frame.Pressed.Add(GameKey.Gather);
+                if (k.tabKey.wasPressedThisFrame) frame.Pressed.Add(GameKey.Inventory);
                 if (k.fKey.wasPressedThisFrame) frame.Pressed.Add(GameKey.TogglePanel);
                 if (k.oKey.wasPressedThisFrame) frame.Pressed.Add(GameKey.OpenSettings);
+                if (k.escapeKey.wasPressedThisFrame && !captured) frame.Pressed.Add(GameKey.Cancel);
                 if (k.escapeKey.wasPressedThisFrame && captured) ReleaseCapture();
             }
             if (m != null)
@@ -122,6 +148,7 @@ namespace JeuSurvie.InputDevices
                 float scroll = m.scroll.ReadValue().y;
                 if (scroll != 0) frame.Wheel = RawInputRules.NormalizeWheel(-(Mathf.Abs(scroll) <= 10 ? scroll * PixelsPerNotch : scroll * PixelsPerNotch / 120), 0);
                 if (m.leftButton.wasPressedThisFrame && !uiBlocking) frame.ClickedGame = true;
+                frame.UseHeld = captured && m.leftButton.isPressed;
             }
 #else
             if (UnityEngine.Input.GetKey(KeyCode.W)) frame.Down.Add(GameKey.Forward);
@@ -129,15 +156,21 @@ namespace JeuSurvie.InputDevices
             if (UnityEngine.Input.GetKey(KeyCode.A)) frame.Down.Add(GameKey.Left);
             if (UnityEngine.Input.GetKey(KeyCode.D)) frame.Down.Add(GameKey.Right);
             if (UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift)) frame.Down.Add(GameKey.Slow);
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1)) frame.Pressed.Add(GameKey.Moment1);
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha2)) frame.Pressed.Add(GameKey.Moment2);
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha3)) frame.Pressed.Add(GameKey.Moment3);
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha4)) frame.Pressed.Add(GameKey.Moment4);
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha5)) frame.Pressed.Add(GameKey.CycleSpeed);
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha6)) frame.Pressed.Add(GameKey.Weather);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F1)) frame.Pressed.Add(GameKey.Moment1);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F2)) frame.Pressed.Add(GameKey.Moment2);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F3)) frame.Pressed.Add(GameKey.Moment3);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F4)) frame.Pressed.Add(GameKey.Moment4);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F5)) frame.Pressed.Add(GameKey.CycleSpeed);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F6)) frame.Pressed.Add(GameKey.Weather);
+            for (int i = 0; i < 8; i++)
+                if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1 + i)) frame.Pressed.Add(GameKey.Hotbar1 + i);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.E)) frame.Pressed.Add(GameKey.Gather);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Tab)) frame.Pressed.Add(GameKey.Inventory);
             if (UnityEngine.Input.GetKeyDown(KeyCode.F)) frame.Pressed.Add(GameKey.TogglePanel);
             if (UnityEngine.Input.GetKeyDown(KeyCode.O)) frame.Pressed.Add(GameKey.OpenSettings);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape) && !captured) frame.Pressed.Add(GameKey.Cancel);
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape) && captured) ReleaseCapture();
+            frame.UseHeld = captured && UnityEngine.Input.GetMouseButton(0);
             if (captured)
             {
                 // Legacy axes are in « mouse units »: about 1/20 of a pixel-delta at default settings.

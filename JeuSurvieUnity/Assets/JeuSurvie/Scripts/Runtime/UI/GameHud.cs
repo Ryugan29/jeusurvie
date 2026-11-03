@@ -25,6 +25,10 @@ namespace JeuSurvie.UI
         public event Action OverlayClicked;
         public event Action<QualityLevel> PresetSelected;
         public event Action ResetRequested;
+        /// <summary>« Nouvelle partie », confirmed by a second click (the old save is kept aside, never deleted).</summary>
+        public event Action NewGameRequested;
+        private double newGameArmedUntil;
+        private Button newGame;
 
         public bool SettingsOpen => settings.style.display == DisplayStyle.Flex;
         public bool PanelVisible => panel.style.display == DisplayStyle.Flex;
@@ -45,7 +49,8 @@ namespace JeuSurvie.UI
             info = Text(panel, "");
             cover = Text(panel, "");
             seed = Text(panel, "");
-            Text(panel, "1 matin · 2 midi · 3 crépuscule · 4 nuit · 5 cycle ×60 · 6 météo · O réglages graphiques · Maj marcher · F masquer · Échap pause").AddToClassList("touches");
+            Text(panel, "Clic gauche outil · E ramasser · 1–8 outils · Tab sac · Maj marcher · F masquer · Échap pause").AddToClassList("touches");
+            Text(panel, "Démo : F1 matin · F2 midi · F3 crépuscule · F4 nuit · F5 cycle ×60 · F6 météo · O réglages graphiques").AddToClassList("touches");
             Root.Add(panel);
 
             overlay = El("voile-pause");
@@ -56,6 +61,22 @@ namespace JeuSurvie.UI
             open.AddToClassList("bouton-voile");
             open.RegisterCallback<ClickEvent>(e => e.StopPropagation());
             overlay.Add(open);
+            Button fresh = null;
+            fresh = newGame = new Button(() =>
+            {
+                if (Time.realtimeSinceStartupAsDouble < newGameArmedUntil)
+                {
+                    newGameArmedUntil = 0;
+                    fresh.text = "Nouvelle partie";
+                    NewGameRequested?.Invoke();
+                    return;
+                }
+                newGameArmedUntil = Time.realtimeSinceStartupAsDouble + 4;
+                fresh.text = "Confirmer : tout recommencer ?";
+            }) { text = "Nouvelle partie" };
+            fresh.AddToClassList("bouton-voile");
+            fresh.RegisterCallback<ClickEvent>(e => e.StopPropagation());
+            overlay.Add(fresh);
             overlay.RegisterCallback<ClickEvent>(e => { if (!SettingsOpen) OverlayClicked?.Invoke(); });
             Root.Add(overlay);
 
@@ -207,6 +228,8 @@ namespace JeuSurvie.UI
 
         public void ShowMode(bool playing, bool paused)
         {
+            newGameArmedUntil = 0; // a half-confirmed « Nouvelle partie » does not survive leaving the overlay
+            if (newGame != null) newGame.text = "Nouvelle partie";
             overlay.style.display = playing ? DisplayStyle.None : DisplayStyle.Flex;
             SetText(overlayText, paused ? "Pause — cliquer pour reprendre" : "Cliquer pour jouer (ZQSD pour marcher, souris pour regarder)");
         }

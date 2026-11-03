@@ -32,3 +32,6 @@
 /Tools~/Blender/__pycache__/
 # Backups of the original CC0 models (like StreamingAssets/assets, not versioned)
 /Tools~/Sauvegardes/
+# Free sources downloaded for the Blender builds, not versioned: Poly Haven textures and Quaternius animations (CC0),
+# Mixamo animations (Adobe's Mixamo licence: free in games, shipped only baked into the game's own files, never as is)
+/Tools~/Sources/

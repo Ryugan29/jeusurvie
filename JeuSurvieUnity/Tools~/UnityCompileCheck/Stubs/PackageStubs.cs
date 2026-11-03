@@ -34,6 +34,7 @@ namespace GLTFast
         public AnimationMethod AnimationMethod { get; set; }
         public bool GenerateMipMaps { get; set; }
         public int AnisotropicFilterLevel { get; set; }
+        public bool TexturesReadable { get; set; }
     }
     public interface IDownloadProvider { }
     public interface IDeferAgent { }
@@ -49,6 +50,8 @@ namespace GLTFast
         public int MaterialCount => 0;
         public Material GetMaterial(int index = 0) => null;
         public Schema.MaterialBase GetSourceMaterial(int index = 0) => null;
+        public int TextureCount => 0;
+        public Texture2D GetTexture(int index = 0) => null;
     }
     namespace Schema
     {
@@ -76,6 +79,7 @@ namespace GLTFast
             public Color BaseColor => Color.white;
             public TextureInfoBase BaseColorTexture => null;
             public TextureInfoBase MetallicRoughnessTexture => null;
+            public float metallicFactor = 1;
         }
     }
     namespace Logging

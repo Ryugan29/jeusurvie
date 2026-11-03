@@ -36,6 +36,10 @@ namespace JeuSurvie.Vegetation
         private readonly Transform hidden;
         public readonly List<Material> GlowingMaterials = new List<Material>();
 
+        /// <summary>Big textures (≥ 1024 px: the HD tools) compressed on the graphics card once loaded (about 4× less
+        /// memory: every tool model is loaded at start), their CPU copy freed. Off for the nature pack (small textures).</summary>
+        public bool CompressLargeTextures { get; set; }
+
         public ModelLibrary(string baseDir, Shader foliageShader, Shader pbrShader)
         {
             this.baseDir = baseDir;
@@ -72,8 +76,9 @@ namespace JeuSurvie.Vegetation
             string path = Path.Combine(baseDir, key + ".gltf");
             if (!File.Exists(path)) throw new FileNotFoundException(path);
             var gltf = new GltfImport(null, null, new SourceMaterialGenerator(pbrShader), new GLTFast.Logging.ConsoleLogger());
-            var settings = new ImportSettings { AnimationMethod = AnimationMethod.None, GenerateMipMaps = true, AnisotropicFilterLevel = 4 };
+            var settings = new ImportSettings { AnimationMethod = AnimationMethod.None, GenerateMipMaps = true, AnisotropicFilterLevel = 4, TexturesReadable = CompressLargeTextures };
             if (!await gltf.Load(new Uri(Path.GetFullPath(path)).AbsoluteUri, settings)) throw new IOException("chargement glTF refusé : " + path);
+            if (CompressLargeTextures) Shrink(gltf);
             var holder = new GameObject(key);
             holder.transform.SetParent(hidden, false);
             if (!await gltf.InstantiateMainSceneAsync(holder.transform)) throw new IOException("instanciation glTF refusée : " + path);
@@ -113,6 +118,20 @@ namespace JeuSurvie.Vegetation
             throw new NotSupportedException("glTFast (com.unity.cloud.gltfast) n'est pas installé : modèles 3D indisponibles.");
 #endif
         }
+
+#if JEUSURVIE_GLTFAST
+        /// <summary>Compresses the big textures of a loaded glTF (BC/DXT, mipmaps kept) and frees their CPU copy.</summary>
+        private static void Shrink(GltfImport gltf)
+        {
+            for (int i = 0; i < gltf.TextureCount; i++)
+            {
+                Texture2D t = gltf.GetTexture(i);
+                if (t == null || !t.isReadable) continue;
+                if (t.width >= 1024 && t.height >= 1024) t.Compress(false);
+                t.Apply(false, true);
+            }
+        }
+#endif
 
         /// <summary>glTFast names Unity materials after the glTF material.</summary>
         private static string MaterialNameOf(Material m) => m.name.Replace(" (Instance)", "");
@@ -189,6 +208,7 @@ namespace JeuSurvie.Vegetation
             pbr.SetFloat("_UseVertexColor", baked ? 1 : 0);
             pbr.SetFloat("_Cutoff", cutoff);
             pbr.SetFloat("_Cull", doubleSided ? (float)CullMode.Off : (float)CullMode.Back);
+            Characters.CharacterLoader.CopyMaps(src, pbr, alpha: false); // relief, roughness, metal a model brings (HD tools)
             NormalMapSpec? normal = Surfaces.NormalMapFor(name);
             if (normal != null)
             {

@@ -115,7 +115,7 @@ namespace JeuSurvie.Tests
             }
         }
 
-        // In the game she stands relaxed (pelvis tilted, thighs forward, a knee bent), walks and runs with the hero's animations:
+        // In the game she stands relaxed, walks and runs with her own animations (filmed, retargeted on her: ClipLibrary):
         // her thighs must not come through her leaves. Counted on the cloth's points against her posed skin, each compared with
         // where it sat in the pose she was made in (where the leaves were laid outside her skin): over a crease (the small of
         // her back, her buttocks, her groin) a leaf bridges the hollow, which the nearest-skin measure cannot tell from being
@@ -133,7 +133,7 @@ namespace JeuSurvie.Tests
         [UnityTest]
         public IEnumerator HerLegsNeverComeThroughTheLeaves()
         {
-            Assume.That(File.Exists(HeroinePath) && File.Exists(HeroPath), "personnages absents");
+            Assume.That(File.Exists(HeroinePath) && File.Exists(AnimationsPath), "personnage ou animations absents");
             var results = new System.Collections.Generic.List<(string gait, double share, Insides worst, int measures, int points)>();
             yield return SinkingWhileShe(new LeafClothTuning(), results);
             string report = string.Join(" ; ", results.Select(r => $"{r.gait} : {r.worst} sur {r.points}"));
@@ -147,25 +147,28 @@ namespace JeuSurvie.Tests
         [UnityTest]
         public IEnumerator TheMeasureSeesLeavesFallingIntoHer()
         {
-            Assume.That(File.Exists(HeroinePath) && File.Exists(HeroPath), "personnages absents");
+            Assume.That(File.Exists(HeroinePath) && File.Exists(AnimationsPath), "personnage ou animations absents");
             var results = new System.Collections.Generic.List<(string gait, double share, Insides worst, int measures, int points)>();
             yield return SinkingWhileShe(new LeafClothTuning { SinkM = 1, TipFreedomM = 0.25 }, results);
             string report = string.Join(" ; ", results.Select(r => $"{r.gait} : {r.worst}"));
             Assert.IsTrue(results.All(r => r.worst.Count > r.share * r.points), "la mesure ne voit pas des feuilles laissées tomber — " + report);
         }
 
-        private static string HeroPath => Path.Combine(Application.streamingAssetsPath, "assets", "models", "characters", "hero.gltf");
+        private static string AnimationsPath => Path.Combine(Path.GetDirectoryName(HeroinePath), "animations.gltf");
+        private static string AnimationsJson => Path.ChangeExtension(AnimationsPath, ".json");
 
-        /// <summary>Loads her with the hero's animations, puts on the outfit with `tuning`, and for each gait keeps the worst
+        /// <summary>Loads her with her animations, puts on the outfit with `tuning`, and for each gait keeps the worst
         /// count of skirt points sunk more than 1 cm into her beyond where they sat when she was made.</summary>
         private static IEnumerator SinkingWhileShe(LeafClothTuning tuning, System.Collections.Generic.List<(string, double, Insides, int, int)> results)
         {
             Shader pbr = Shader.Find("JeuSurvie/NaturePBR");
-            Task<AnimatedModel> heroTask = CharacterLoader.LoadAsync(HeroPath, 1.7, pbr, null, false);
             Task<AnimatedModel> task = CharacterLoader.LoadAsync(HeroinePath, 1.7, pbr);
-            yield return new WaitUntil(() => task.IsCompleted && heroTask.IsCompleted);
-            Assert.IsTrue(task.Status == TaskStatus.RanToCompletion && heroTask.Status == TaskStatus.RanToCompletion, "chargement raté");
-            AnimatedModel model = task.Result, hero = heroTask.Result;
+            yield return new WaitUntil(() => task.IsCompleted);
+            Assert.IsTrue(task.Status == TaskStatus.RanToCompletion, "chargement raté");
+            AnimatedModel model = task.Result;
+            var clipsTask = ClipLibrary.AddAsync(model, AnimationsPath, AnimationsJson);
+            yield return new WaitUntil(() => clipsTask.IsCompleted);
+            Assert.IsTrue(clipsTask.Status == TaskStatus.RanToCompletion, "animations illisibles : " + clipsTask.Exception?.GetBaseException().Message);
             // Away from the origin, where the bootstrap starts the game (its world, its own heroine) in every PlayMode test:
             // measured there, her held leaf tops sank at random, as if her cloth skipped steps.
             model.Pivot.position = new Vector3(500, 0, 0);
@@ -182,14 +185,14 @@ namespace JeuSurvie.Tests
                 float[] made = Depths(skirt, body, baked);
                 Assert.IsTrue(made.All(d => Mathf.Abs(d) < 0.15f), "les points de la jupe ne sont pas encore sur elle : mesure de départ fausse");
 
-                RetargetedLocomotion moves = RetargetedLocomotion.Create(hero, model, new[] { "pelvis" });
+                CharacterAnimator moves = CharacterAnimator.Create(model, clipsTask.Result);
                 foreach ((string name, double speed, double share) in Gaits)
                 {
                     Insides worst = default;
                     int measures = 0;
                     for (int frame = 0; frame < BlendFrames + WatchFrames; frame++)
                     {
-                        moves.UpdateLocomotion(Time.deltaTime, speed);
+                        moves.Tick(Time.deltaTime, speed, false);
                         yield return null;
                         if (frame < BlendFrames || (frame - BlendFrames) % MeasureEvery != 0) continue;
                         if (HeldLag(skirt) > 0.005f) continue; // the cloth's points lag her skin by a frame (a loaded machine)
@@ -207,7 +210,6 @@ namespace JeuSurvie.Tests
                 Object.Destroy(baked);
                 Object.Destroy(view.gameObject);
                 Object.Destroy(model.Pivot.gameObject);
-                Object.Destroy(hero.Pivot.gameObject);
             }
         }
 

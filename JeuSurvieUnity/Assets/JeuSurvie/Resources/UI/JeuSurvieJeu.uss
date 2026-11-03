@@ -1,0 +1,68 @@
+/* The harvest interface (GameplayHud): same palette as the settings — dark ink, old-gold borders and titles, cream text —
+   with a leaf green for gains. Ink rgba(22,18,30), gold rgb(232,182,73), border rgb(91,74,46), cream rgb(244,236,216),
+   muted rgb(201,189,160), leaf rgb(170,214,96), alert rgb(240,150,110). */
+.jeu { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+
+/* What is aimed at: just above the hotbar. */
+.visee { position: absolute; left: 0; right: 0; bottom: 104px; align-items: center; }
+.visee-nom { padding: 3px 14px 0 14px; color: rgb(232, 182, 73); font-size: 18px; -unity-font-style: bold; -unity-text-align: middle-center;
+    -unity-text-outline-width: 0.6px; -unity-text-outline-color: rgba(10, 8, 16, 0.9); }
+.visee-action { margin-top: 2px; padding: 4px 12px; border-radius: 8px; background-color: rgba(22, 18, 30, 0.72); color: rgb(244, 236, 216);
+    font-size: 15px; -unity-text-align: middle-center; }
+.visee-action.impossible { color: rgb(240, 150, 110); }
+
+/* Messages, top right, newest at the bottom. */
+.messages { position: absolute; right: 18px; top: 18px; width: 300px; align-items: flex-end; }
+.message { flex-direction: row; align-items: center; margin-bottom: 6px; padding: 6px 12px 6px 8px; border-radius: 9px; border-width: 1px;
+    border-color: rgb(91, 74, 46); background-color: rgba(22, 18, 30, 0.86); }
+.message-icone { width: 30px; height: 30px; margin-right: 8px; -unity-background-scale-mode: scale-to-fit; }
+.message-texte { color: rgb(244, 236, 216); font-size: 15px; white-space: normal; max-width: 250px; }
+.message.gain .message-texte { color: rgb(170, 214, 96); -unity-font-style: bold; }
+.message.alerte { border-color: rgb(150, 82, 56); }
+.message.alerte .message-texte { color: rgb(240, 170, 130); }
+
+/* Hotbar: eight slots at the bottom, the tool in hand outlined in gold. */
+.barre { position: absolute; left: 0; right: 0; bottom: 18px; flex-direction: row; justify-content: center; }
+.case-barre { width: 62px; height: 62px; margin: 0 3px; border-radius: 10px; border-width: 1px; border-color: rgb(91, 74, 46);
+    background-color: rgba(22, 18, 30, 0.78); }
+.case-barre.en-main { border-width: 2px; border-color: rgb(255, 216, 107); background-color: rgba(60, 46, 20, 0.85); }
+.case-touche { position: absolute; left: 5px; top: 2px; color: rgb(201, 189, 160); font-size: 12px; -unity-font-style: bold; }
+
+/* Slots (bag and hotbar). */
+.case { width: 66px; height: 66px; margin: 3px; border-radius: 10px; border-width: 1px; border-color: rgba(91, 74, 46, 0.8);
+    background-color: rgba(0, 0, 0, 0.32); }
+.case:hover { border-color: rgb(232, 182, 73); background-color: rgba(232, 182, 73, 0.1); }
+.case.choisie { border-color: rgb(232, 182, 73); background-color: rgba(232, 182, 73, 0.16); }
+.case.en-main { border-width: 2px; border-color: rgb(255, 216, 107); }
+.case.estompee { opacity: 0.28; }
+.case.cassee .icone, .case-barre.cassee .icone { -unity-background-image-tint-color: rgba(150, 120, 120, 0.7); }
+.icone { position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px; -unity-background-scale-mode: scale-to-fit; }
+.quantite { position: absolute; right: 5px; bottom: 2px; color: rgb(244, 236, 216); font-size: 14px; -unity-font-style: bold;
+    -unity-text-outline-width: 0.8px; -unity-text-outline-color: rgba(10, 8, 16, 1); }
+.usure { position: absolute; left: 7px; right: 7px; bottom: 5px; height: 5px; border-radius: 3px; background-color: rgba(0, 0, 0, 0.6); }
+.usure-niveau { height: 5px; border-radius: 3px; background-color: rgb(170, 214, 96); }
+.usure-niveau.faible { background-color: rgb(240, 150, 110); }
+
+/* The bag. */
+.sac { position: absolute; left: 50%; top: 50%; translate: -50% -56%; width: 492px; padding: 14px 16px 12px 16px; border-radius: 14px;
+    border-width: 1px; border-color: rgb(91, 74, 46); background-color: rgba(22, 18, 30, 0.94); }
+.sac-entete { flex-direction: row; align-items: center; margin-bottom: 8px; }
+.sac-titre { color: rgb(232, 182, 73); font-size: 22px; -unity-font-style: bold; margin-right: 12px; }
+.sac-filtres { flex-direction: row; flex-grow: 1; flex-wrap: wrap; }
+.sac-filtre { margin: 2px; padding: 4px 8px; border-radius: 7px; border-width: 0; background-color: rgba(232, 182, 73, 0.08); color: rgb(201, 189, 160); font-size: 13px; }
+.sac-filtre:hover { color: rgb(244, 236, 216); background-color: rgba(232, 182, 73, 0.16); }
+.sac-filtre.actif { background-color: rgb(232, 182, 73); color: rgb(29, 20, 5); -unity-font-style: bold; }
+.sac-grille { flex-direction: row; flex-wrap: wrap; width: 460px; }
+.sac-pied { flex-direction: row; justify-content: flex-end; margin-top: 8px; }
+.sac-bouton { margin-left: 8px; padding: 7px 12px; border-radius: 9px; border-width: 1px; border-color: rgb(91, 74, 46);
+    background-color: rgba(232, 182, 73, 0.1); color: rgb(244, 236, 216); font-size: 14px; }
+.sac-bouton:hover { background-color: rgba(232, 182, 73, 0.22); }
+.sac-bouton:disabled { opacity: 0.4; }
+.sac-aide { margin-top: 8px; color: rgb(153, 145, 128); font-size: 12px; white-space: normal; }
+
+/* Tooltip and dragged icon. */
+.bulle { position: absolute; max-width: 280px; padding: 8px 12px; border-radius: 10px; border-width: 1px; border-color: rgb(91, 74, 46);
+    background-color: rgba(14, 11, 20, 0.97); }
+.bulle-titre { color: rgb(232, 182, 73); font-size: 16px; -unity-font-style: bold; margin-bottom: 3px; }
+.bulle-texte { color: rgb(244, 236, 216); font-size: 13px; white-space: normal; }
+.fantome { position: absolute; width: 56px; height: 56px; opacity: 0.85; -unity-background-scale-mode: scale-to-fit; }

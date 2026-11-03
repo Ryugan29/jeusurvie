@@ -23,6 +23,8 @@ namespace JeuSurvie.Core.App
         public long WorldTicks;
         /// <summary>World ticks per simulation tick (1 = normal, 60 = demo accelerated cycle).</summary>
         public int TimeScale = 1;
+        /// <summary>Time actually played, in world ticks: never goes back (unlike WorldTicks, moved by the demo's time-of-day keys).</summary>
+        public long PlayTicks;
         public Vec3 Previous;
         public Vec3 Current;
         private double accMs;
@@ -77,6 +79,7 @@ namespace JeuSurvie.Core.App
             Previous = from;
             Current = AvoidObstacles(from, Ground.MoveOnGround(from, dirX * distance, dirZ * distance, ground, Balance.PlayerMaxSlope));
             WorldTicks += TimeScale;
+            PlayTicks += TimeScale;
         }
 
         private Vec3 AvoidObstacles(Vec3 from, Vec3 moved)

@@ -37,6 +37,8 @@ namespace JeuSurvie.Core.RenderData
 
         private static readonly (Regex pattern, SurfaceSpec surface)[] Table =
         {
+            (new Regex("^tete_(cuivre|fer)$", RegexOptions.IgnoreCase), new SurfaceSpec(0.8, 0.38, 0.8)), // tool heads (Tools~/Blender/recolte.py)
+            (new Regex("^minerai_", RegexOptions.IgnoreCase), new SurfaceSpec(0.55, 0.45, 0.7)),        // ore nuggets
             (new Regex("^rocks$|pathrocks|rock", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.82, 0.5)),
             (new Regex("bark|bois", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.9, 0.4)),
             (new Regex("mushroom", RegexOptions.IgnoreCase), new SurfaceSpec(0, 0.45, 0.6)),

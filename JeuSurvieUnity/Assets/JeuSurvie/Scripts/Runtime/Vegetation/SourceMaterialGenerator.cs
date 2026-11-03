@@ -59,6 +59,11 @@ namespace JeuSurvie.Vegetation
             {
                 m.SetTexture("_RoughnessMap", roughnessMap);
                 m.SetFloat("_UseRoughnessMap", 1);
+                if (pbr.metallicFactor > 0) // metal from the same map's blue channel (the copper and iron tools)
+                {
+                    m.SetFloat("_Metallic", pbr.metallicFactor);
+                    m.SetFloat("_UseMetallicMap", 1);
+                }
             }
             return m;
         }

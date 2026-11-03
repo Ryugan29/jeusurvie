@@ -4,7 +4,8 @@ using JeuSurvie.Core.Shared;
 
 namespace JeuSurvie.Core.App
 {
-    public enum InputMode { Playing, Paused, ResumePrompt }
+    /// <summary>Menu: the bag is open — the game goes on, the mouse is for the interface (no look, no action in the world).</summary>
+    public enum InputMode { Playing, Paused, ResumePrompt, Menu }
     public enum ModeEvent { CaptureLost, CaptureGained, CaptureRefused }
 
     public static class InputModes
@@ -21,8 +22,13 @@ namespace JeuSurvie.Core.App
             }
         }
 
-        public static bool SimulationRuns(InputMode mode) => mode == InputMode.Playing;
+        /// <summary>The bag key: from the game it opens the menu (the cursor is then released on purpose, which is not a pause).</summary>
+        public static InputMode OpenMenu(InputMode mode) => mode == InputMode.Playing ? InputMode.Menu : mode;
+
+        public static bool SimulationRuns(InputMode mode) => mode == InputMode.Playing || mode == InputMode.Menu;
         public static bool IsInGame(InputMode mode) => mode == InputMode.Playing;
+        /// <summary>Turning the camera and acting in the world (strikes, harvest) only with the cursor captured.</summary>
+        public static bool WorldActionsAllowed(InputMode mode) => mode == InputMode.Playing;
     }
 
     public static class RawInputRules

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using JeuSurvie.Core.App;
+using JeuSurvie.Core.Gameplay;
 using JeuSurvie.Core.RenderData;
 using JeuSurvie.Core.World;
 using UnityEngine;
@@ -15,8 +16,11 @@ namespace JeuSurvie.World
     public sealed class ChunkPayload
     {
         public ChunkMeshData Mesh;
+        /// <summary>Generated vegetation, harvest layer included (the gameplay shows it with what was harvested removed).</summary>
         public Dictionary<string, float[]> Vegetation;
         public Dictionary<string, float[]> GroundCover;
+        /// <summary>What can be harvested in this chunk (trees, rocks, plants, features, camp).</summary>
+        public List<Harvestable> Harvestables;
     }
 
     public sealed class ChunkWorkerSource : IChunkSource<ChunkPayload>, IDisposable
@@ -33,10 +37,13 @@ namespace JeuSurvie.World
         private readonly Thread[] threads;
         private volatile bool disposed;
 
-        public ChunkWorkerSource(uint seed, int workerCount, bool groundCover)
+        private readonly CampSite camp;
+
+        public ChunkWorkerSource(uint seed, int workerCount, bool groundCover, CampSite camp = null)
         {
             this.seed = seed;
             this.groundCover = groundCover;
+            this.camp = camp;
             threads = new Thread[Math.Max(1, workerCount)];
             for (int i = 0; i < threads.Length; i++)
             {
@@ -137,11 +144,19 @@ namespace JeuSurvie.World
         private ReadyChunk<ChunkPayload> Generate(int cx, int cz)
         {
             ChunkData chunk = Chunk.Generate(seed, cx, cz);
+            List<Resource> resources = Placement.InChunk(seed, cx, cz);
+            List<Harvestable> harvestables = HarvestSources.InChunk(seed, cx, cz, resources, camp);
+            Dictionary<string, float[]> vegetation = VegetationInstances.Build(resources, chunk);
+            var added = new List<Harvestable>();
+            foreach (Harvestable h in harvestables) if (h.Id.Layer != NodeLayer.Resource) added.Add(h);
+            if (camp != null && Chunk.CoordOf(camp.Bench.X, camp.Bench.Z).Equals(new ChunkCoord(cx, cz))) added.Add(camp.Bench);
+            OverlayInstances.AddBatches(added, chunk, vegetation);
             var payload = new ChunkPayload
             {
                 Mesh = MeshData.Build(chunk, new WorldSamplers(seed, cx, cz)),
-                Vegetation = VegetationInstances.Build(Placement.InChunk(seed, cx, cz), chunk),
+                Vegetation = vegetation,
                 GroundCover = groundCover ? GroundCoverInstances.Build(GroundCover.InChunk(seed, chunk), chunk) : new Dictionary<string, float[]>(),
+                Harvestables = harvestables,
             };
             return new ReadyChunk<ChunkPayload>(chunk, payload);
         }
